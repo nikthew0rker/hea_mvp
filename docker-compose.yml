@@ -1,0 +1,78 @@
+services:
+  definition-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        SERVICE_MODULE: agents.definition_agent.app:app
+    env_file:
+      - .env
+    ports:
+      - "8101:8000"
+
+  compiler-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        SERVICE_MODULE: agents.compiler_agent.app:app
+    env_file:
+      - .env
+    ports:
+      - "8102:8000"
+
+  runtime-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        SERVICE_MODULE: agents.runtime_agent.app:app
+    env_file:
+      - .env
+    ports:
+      - "8103:8000"
+
+  report-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        SERVICE_MODULE: agents.report_agent.app:app
+    env_file:
+      - .env
+    ports:
+      - "8104:8000"
+
+  evaluation-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        SERVICE_MODULE: agents.evaluation_agent.app:app
+    env_file:
+      - .env
+    ports:
+      - "8105:8000"
+
+  specialist-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+      args:
+        BOT_MODULE: bots.specialist_bot.bot
+    env_file:
+      - .env
+    depends_on:
+      - definition-agent
+
+  user-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+      args:
+        BOT_MODULE: bots.user_bot.bot
+    env_file:
+      - .env
+    depends_on:
+      - runtime-agent
+      - report-agent

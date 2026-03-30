@@ -2,305 +2,181 @@
 
 # Documentation Overview
 
-This folder contains the architecture and technical documentation for the **Hea MVP** — a prompt-driven health assessment engine.
+This folder contains the design and technical documentation for the **Hea MVP v2**.
 
-The goal of this documentation is to describe:
+The system is now built as an **agentic architecture with two Telegram bots**:
 
-- what the system is
-- how it is structured
-- which services exist
-- how data flows through the system
-- how to work with the API
-- how the MVP can grow into a lightweight product platform
+- **Specialist Bot** — collects assessment definitions from a specialist in free-form text
+- **User Bot** — runs the assessment with the end user in Telegram
+
+Both bots use a shared model layer through **Together AI API**.
+
+The system does **not** execute raw chat history directly.  
+The canonical executable artifact remains the:
+
+**Compiled Assessment Graph**
+
+This graph is produced from specialist input and is later executed by the runtime agent.
 
 ---
 
-## What this project is
+## Core Idea
 
-The MVP implements a **prompt-driven assessment engine** where:
+The core flow is:
 
-- a specialist defines assessment logic outside of code
-- the definition is compiled into an executable graph
-- the runtime executes that graph for end users
-- the system generates a final report
+**specialist Telegram chat → structured definition draft → compiled graph → user Telegram assessment → final report**
 
-The architecture is intentionally lightweight:
-- one MVP
-- one main end-to-end flow
-- clear domain boundaries
+This preserves:
+
+- flexibility at authoring time
+- deterministic execution at runtime
+- versioning and safety
+- reproducibility and evaluation
 
 ---
 
 ## Documentation Map
 
-### Core system documents
+### High-level docs
 
 #### `ARCHITECTURE.md`
-Start here if you want the high-level picture.
+Read this first.
 
 Explains:
-- the overall architecture
-- key design principles
-- compiler/runtime split
-- graph runtime model
-- guardrails
-- eval-driven approach
-- product fit and MVP boundaries
-
-Use this document to understand **why the system is designed this way**.
-
----
+- the overall system structure
+- the two-bot model
+- the agent roles
+- shared Together AI layer
+- canonical compiled graph
+- runtime and reporting flow
 
 #### `SERVICES.md`
-Describes the system as a set of logical services.
-
 Explains:
-- which services exist
-- what each service is responsible for
-- how services interact
-- why this is still a lightweight MVP and not enterprise overdesign
-
-Use this document to understand **service boundaries and system decomposition**.
-
----
+- what logical services/agents exist
+- what each service owns
+- how the bots and agents interact
+- which boundaries are preserved in MVP
 
 #### `DATA_MODEL.md`
-Describes the core data model and storage entities.
-
 Explains:
-- the main tables/entities
-- relationships between definitions, graphs, sessions, reports, and evals
-- which artifact is canonical
-- how versioning works
-
-Use this document to understand **what data the system stores and why**.
-
----
+- which entities are stored
+- how specialist chats, drafts, graphs, sessions, reports, and evals relate
+- how canonical graph versioning works
 
 #### `API.md`
-Describes the MVP API surface.
-
 Explains:
-- all main endpoints
-- request/response shapes
-- error format
-- API grouped by service boundaries
+- internal/admin API surface
+- orchestration endpoints
+- service-to-service contract examples
 
-Use this document to understand **how clients interact with the system**.
+#### `ideas.md`
+Contains:
+- roadmap ideas
+- future product extensions
+- optional features intentionally left out of MVP
 
 ---
 
-## Service documentation
+## Service Documentation
 
-Detailed service descriptions are located in:
+Detailed service documents are under:
 
 ```text
 docs/services/
 ```
 
-These files describe each logical service at a service-overview level.
+These files preserve the original naming convention, but their content reflects the **new agentic architecture**.
 
 ### `services/definition-service.md`
-Assessment Definition Service
-
-Use this to understand:
-- how specialist-authored definitions are stored
-- what belongs to authoring input
-- what is in scope and out of scope for this service
-
----
+Now describes the **Specialist Intake + Definition Agent** boundary.
 
 ### `services/compiler-service.md`
-Assessment Compiler Service
-
-Use this to understand:
-- how definitions are compiled into executable graphs
-- what validation happens before runtime
-- how compiled graph versions are created
-
----
+Now describes the **Compiler Agent**.
 
 ### `services/runtime-service.md`
-Assessment Runtime Service
-
-Use this to understand:
-- how the user assessment flow works
-- how session state is handled
-- how branching, score, and conversational freedom work at runtime
-
----
+Now describes the **User Bot + Runtime Agent** boundary.
 
 ### `services/report-service.md`
-Report Generation Service
-
-Use this to understand:
-- how final reports are built
-- how HTML/PDF output works
-- which output guardrails apply
-
----
+Now describes the **Report Agent**.
 
 ### `services/evaluation-service.md`
-Evaluation & Safety Service
-
-Use this to understand:
-- which checks and evals exist
-- how safety rules are validated
-- how the MVP remains testable and debuggable
+Now describes the **Evaluation & Safety Agent**.
 
 ---
 
-## Technical specs
+## Technical Specs
 
-The more implementation-oriented technical specs are also located in:
+The `techspec-*` documents are implementation-facing versions of the service docs.
 
-```text
-docs/services/
-```
-
-These files go one step deeper than the service overviews and are intended to support actual implementation work.
-
-### `services/techspec-definition-service.md`
-Implementation-focused spec for the Definition Service.
-
-Includes:
-- API expectations
-- storage model
-- validation rules
+They focus on:
+- responsibilities
+- inputs/outputs
+- state
+- internal contracts
+- edge cases
 - acceptance criteria
 
 ---
 
-### `services/techspec-compiler-service.md`
-Implementation-focused spec for the Compiler Service.
+## Suggested Reading Order
 
-Includes:
-- compile pipeline
-- graph validation rules
-- persistence model
-- publish rules
-
----
-
-### `services/techspec-runtime-service.md`
-Implementation-focused spec for the Runtime Service.
-
-Includes:
-- runtime flow
-- session model
-- conversation orchestration
-- safety constraints
-- acceptance criteria
-
----
-
-### `services/techspec-report-service.md`
-Implementation-focused spec for the Report Service.
-
-Includes:
-- report generation flow
-- output structure
-- rendering rules
-- report guardrails
-
----
-
-### `services/techspec-evaluation-service.md`
-Implementation-focused spec for the Evaluation & Safety Service.
-
-Includes:
-- eval targets
-- check types
-- result model
-- acceptance criteria
-
----
-
-## Suggested reading order
-
-If you are new to the project, the recommended order is:
-
+### To understand the system quickly
 1. `ARCHITECTURE.md`
 2. `SERVICES.md`
 3. `DATA_MODEL.md`
-4. `API.md`
-5. `services/runtime-service.md`
-6. `services/techspec-runtime-service.md`
 
-If you want to understand the project quickly, start with:
+### To understand implementation boundaries
+1. `SERVICES.md`
+2. `services/*.md`
+3. `services/techspec-*.md`
 
-1. `ARCHITECTURE.md`
-2. `SERVICES.md`
-3. `API.md`
-
-If you want to implement the system, read:
-
-1. `ARCHITECTURE.md`
+### To implement or review internal contracts
+1. `API.md`
 2. `DATA_MODEL.md`
-3. `API.md`
-4. `services/techspec-*.md`
+3. `services/techspec-*.md`
 
 ---
 
-## Canonical architectural idea
-
-The most important idea in this project is:
-
-**specialist-defined input → compiler → canonical compiled graph → runtime execution → final report**
-
-This means:
-
-- raw specialist input is the authoring source
-- the **compiled graph** is the canonical executable artifact
-- runtime always executes a graph version
-- reports and evals are always tied to that graph version
-
----
-
-## MVP boundaries
-
-This documentation describes an MVP, not a full enterprise platform.
+## MVP Boundaries
 
 ### Included in MVP
-- text-based assessment definition
-- graph compilation
-- runtime assessment flow
-- final report generation
-- lightweight safety and evals
+- two Telegram bots
+- Together AI integration
+- specialist-driven definition collection
+- compiled graph generation
+- graph-driven user assessment
+- final user report
+- lightweight evaluation and safety checks
 
-### Planned for later
-- specialist-facing authoring UI
+### Not included in MVP
+- specialist web UI
 - visual graph editor
-- richer evidence integrations
-- advanced review workflows
-- dashboards and analytics
+- advanced evidence integrations
+- dashboards
+- multi-tenant administration
 
 ---
 
-## Notes on structure
+## Canonical Artifact
 
-This documentation is intentionally separated into:
+The system has one canonical executable artifact:
 
-- **high-level architecture docs**
-- **service overviews**
-- **technical implementation specs**
+**Compiled Assessment Graph**
 
-This allows the project to be read at different levels:
-
-- product/system level
-- service boundary level
-- implementation level
+This means:
+- specialist Telegram messages are not executed directly
+- drafts are not executed directly
+- runtime always uses a compiled graph version
+- reports and evals are always tied to a graph version
 
 ---
 
 ## Summary
 
-Use this folder as the main source of truth for the MVP design.
+This documentation describes a **lightweight agentic platform** for prompt-driven health assessments.
 
-If you need:
-
-- **big picture** → read `ARCHITECTURE.md`
-- **service boundaries** → read `SERVICES.md`
-- **data/storage model** → read `DATA_MODEL.md`
-- **API contract** → read `API.md`
-- **implementation detail** → read `services/techspec-*.md`
+The system uses:
+- Telegram as the external interface
+- Together AI as the shared model layer
+- agents for structuring, compiling, executing, reporting, and evaluating
+- compiled graph as the stable execution truth

@@ -1,0 +1,25 @@
+# Generic Dockerfile for internal FastAPI agent services.
+# Usage from docker-compose:
+#   SERVICE_MODULE=agents.definition_agent.app:app
+#
+# We copy uv from the official image and use uv to install the project dependencies.
+
+FROM python:3.12-slim AS base
+COPY --from=ghcr.io/astral-sh/uv:0.11.2 /uv /uvx /bin/
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY pyproject.toml .python-version ./
+RUN uv sync --no-dev
+
+COPY . .
+
+ARG SERVICE_MODULE
+ENV SERVICE_MODULE=${SERVICE_MODULE}
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "uv run uvicorn ${SERVICE_MODULE} --host 0.0.0.0 --port 8000"]
