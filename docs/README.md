@@ -1,92 +1,136 @@
-# Hea MVP v2 — Technical Documentation
+# Hea MVP — Final Technical Documentation
 
-This folder contains the current technical documentation for the **controller-based specialist workflow** and the **published-graph handoff** to the patient assistant.
+This folder contains the final project documentation for the current Hea MVP architecture.
 
-## Documentation map
+## What this documentation reflects
 
-### Product and system-level documents
-- `ARCHITECTURE.md` — end-to-end system architecture, main workflows, runtime boundaries, deployment shape
-- `SERVICES.md` — service catalog, responsibilities, dependencies, data ownership, runtime interactions
+This documentation reflects the **current system direction** after the latest changes:
 
-### Service specifications
-- `definition-service.md` — structured extraction and edit application for assessment drafts
-- `compiler-service.md` — conversion from structured draft to executable graph artifact
-- `runtime-service.md` — patient-side graph execution and conversational runtime
-- `report-service.md` — patient-facing report generation
-- `evaluation-service.md` — validation and quality checks for graph artifacts and outputs
-- `specialist-controller.md` — specialist-side controller behavior, reasoning flow, tool selection, dialogue boundaries
-- `publish-handoff.md` — publish flow, active graph storage, patient assistant handoff contract
+- specialist-side **controller-based authoring**
+- definition → compile → publish workflow
+- persistent local JSON-backed storage for MVP
+- graph library and graph registry
+- patient-side **orchestration over a graph collection**
+- consent before assessment execution
+- graph-agnostic patient runtime
+- return from assessment flow back to free conversation
 
-## Current system state
+This is no longer documented as a single hardcoded diabetes questionnaire flow.  
+Instead, the architecture is described as a reusable framework for **any published assessment graph**.
 
-The documentation reflects the **current implementation direction**:
+---
 
-- the old planner-agent-based specialist orchestration is removed
-- the specialist bot now acts as a **controller-based copilot**
-- the specialist side works around a live **draft object**
-- the system supports:
-  - draft extraction from noisy medical content
-  - draft editing
-  - graph compilation
-  - graph publication
-  - patient assistant handoff through shared published-graph storage
+## Reading order
 
-## Main architectural idea
-
-The specialist experience is no longer a rigid scripted state machine.
-
-Instead, the specialist bot performs a repeated loop:
-
-1. understand the latest user message in context
-2. decide what operation is needed on the current draft
-3. execute one safe workflow action
-4. answer naturally in the user's language
-5. preserve system boundaries:
-   - no diagnosis
-   - no treatment plan
-   - no medication recommendation
-   - stay inside graph-building workflow
-
-## Canonical artifacts
-
-The core product artifacts in this MVP are:
-
-1. **Structured draft**
-   - topic
-   - target audience
-   - candidate questions
-   - scoring rules
-   - risk bands
-   - report requirements
-   - safety requirements
-
-2. **Compiled graph**
-   - executable assessment graph
-   - graph identifier
-   - graph metadata
-
-3. **Published active graph**
-   - the graph currently exposed to the patient assistant
-   - stored in shared storage for runtime handoff
-
-## What changed compared to older docs
-
-This documentation supersedes older assumptions such as:
-
-- separate planner agent as the main specialist orchestrator
-- hardcoded demo graph ids for patient runtime
-- publish as a placeholder only
-- specialist flow centered on fixed scripted templates
-
-The current docs describe a **controller-driven specialist workflow** with a **real publish handoff**.
-
-## Suggested reading order
-
-If you are new to the project, read in this order:
+If you are new to the system, read in this order:
 
 1. `ARCHITECTURE.md`
 2. `SERVICES.md`
-3. `specialist-controller.md`
-4. `definition-service.md`
-5. `publish-handoff.md`
-6. `runtime-service.md`
+3. `SPECIALIST_ARCHITECTURE.md`
+4. `PATIENT_ORCHESTRATION_ARCHITECTURE.md`
+5. `PATIENT_RUNTIME_CONTRACT.md`
+6. `definition-service.md`
+7. `compiler-service.md`
+8. `publish-handoff.md`
+9. `graph-registry.md`
+10. `graph-search.md`
+
+---
+
+## Main documents
+
+### Core architecture
+- `ARCHITECTURE.md`
+- `SERVICES.md`
+
+### Specialist-side authoring
+- `SPECIALIST_ARCHITECTURE.md`
+- `specialist-controller.md`
+- `definition-service.md`
+- `compiler-service.md`
+- `publish-handoff.md`
+
+### Patient-side orchestration
+- `PATIENT_ORCHESTRATION_ARCHITECTURE.md`
+- `patient-orchestrator.md`
+- `graph-registry.md`
+- `graph-search.md`
+- `PATIENT_RUNTIME_CONTRACT.md`
+
+### Supporting system behavior
+- `report-service.md`
+- `evaluation-service.md`
+- `DATA_AND_STORAGE.md`
+
+---
+
+## Canonical system idea
+
+The platform has two major sides:
+
+### 1. Specialist side
+A specialist works with the system to:
+- provide source material
+- extract a structured draft
+- edit that draft
+- compile it into a runtime-ready graph
+- publish it into the graph library
+
+### 2. Patient side
+A patient interacts with a conversational assistant that:
+- starts in free conversation mode
+- analyzes the user’s intent, goals, or problems
+- searches the graph collection
+- proposes a suitable assessment
+- waits for consent
+- executes the chosen graph
+- returns the result
+- goes back to free conversation mode
+
+---
+
+## Why this architecture matters
+
+This architecture avoids two common failure modes:
+
+### Failure mode 1 — rigid specialist workflow
+A scripted specialist bot cannot properly support real authoring.  
+The specialist side therefore uses a **controller + draft + compile/publish** architecture.
+
+### Failure mode 2 — rigid questionnaire patient bot
+A questionnaire bot hardwired to one graph cannot behave like a real assistant.  
+The patient side therefore uses **orchestration over a graph library**, not a single active graph only.
+
+---
+
+## Current MVP limitations
+
+This is still an MVP. The system deliberately stays lightweight.
+
+Known limitations:
+- file-based storage instead of a database
+- lightweight graph registry
+- simplified graph search ranking
+- no UI for authoring or graph browsing
+- limited session persistence semantics
+- no enterprise-grade auth, audit, or approvals
+
+These are acceptable for MVP and preserve the platform’s simplicity.
+
+---
+
+## Guiding product boundary
+
+The system is an **assessment platform**, not a full medical advisor.
+
+It may:
+- explain an assessment
+- guide the user through it
+- present graph-defined results
+
+It must not:
+- diagnose
+- prescribe treatment
+- recommend medication
+- drift into unrestricted medical consultation
+

@@ -2,118 +2,46 @@
 
 ## 1. Purpose
 
-Publish handoff is the bridge between:
-- specialist-side graph authoring
-- patient-side graph execution
+Publish Handoff connects specialist authoring to patient-side usage.
 
-Without publish, a compiled graph exists but is not active for patient assistant runtime.
-
----
-
-## 2. Problem this solves
-
-Earlier MVP behavior:
-- specialist bot could compile
-- but publish was only a placeholder
-- patient assistant used a hardcoded graph id or no active graph at all
-
-This broke the end-to-end platform story.
-
-The current publish handoff fixes that.
+A compiled graph is not enough by itself.  
+It becomes useful only when publication makes it available to:
+- active graph storage
+- graph library / registry
 
 ---
 
-## 3. Current MVP design
+## 2. Main outputs of publish
 
-The MVP uses **file-based shared storage**.
+### 2.1 Active graph
+The currently active graph record.
 
-### Active graph file
-`data/active_graph.json`
-
-Stores:
+### 2.2 Graph registry entry
+A searchable library record with:
 - graph id
-- publication metadata
+- graph metadata
 - graph payload
-
-### Registry file
-`data/graph_registry.json`
-
-Stores:
-- publish history entries
-- graph ids
-- publication timestamps
-- metadata
+- publication timestamp
 
 ---
 
-## 4. Publish flow
+## 3. Why graph registry matters
 
-### Step 1 — compile
-Specialist workflow compiles the current draft and receives:
-- `graph_version_id`
-- graph payload
+If publication only updates one active graph file, then the patient assistant is forced into a single-graph model.
 
-### Step 2 — publish
-Specialist workflow calls publish logic:
-- graph becomes active
-- `data/active_graph.json` is overwritten
-- `data/graph_registry.json` is appended
-
-### Step 3 — patient assistant uses active graph
-Patient bot loads `data/active_graph.json` on `/start` and on subsequent interaction.
+To support graph discovery, publish must also write into the **graph registry**.
 
 ---
 
-## 5. Data contract
+## 4. MVP storage model
 
-### `active_graph.json`
-```json
-{
-  "graph_id": "graph_v1_demo",
-  "status": "published",
-  "is_active": true,
-  "published_at": "2026-03-31T00:00:00Z",
-  "metadata": {},
-  "graph": {}
-}
-```
+At the moment, publish uses local file-backed JSON storage:
+- `data/active_graph.json`
+- `data/graph_registry.json`
 
----
-
-## 6. Why this is enough for MVP
-
-This is intentionally simple and practical:
-- no extra service required
+This is acceptable for MVP because it is:
+- simple
+- transparent
 - easy to debug
-- easy to inspect manually
-- enough for one-active-graph demo flow
+- sufficient for a lightweight graph library
 
-This gives a real end-to-end story:
-specialist bot -> compile -> publish -> patient bot test
-
----
-
-## 7. Docker requirement
-
-Because publish uses local shared storage, the bots must share the same `data` directory.
-
-Current compose requirement:
-- `./data:/app/data` mounted into:
-  - specialist-bot
-  - user-bot
-
-Without this, specialist-side publish and patient-side load would not see the same files.
-
----
-
-## 8. Future expansion path
-
-Likely future evolution:
-- database-backed graph registry
-- explicit graph activation / deactivation
-- multiple active graph environments
-- graph history UI
-- rollout strategies between published graphs
-- access control and approvals
-
-For MVP, file-based publish storage is sufficient and intentionally lightweight.

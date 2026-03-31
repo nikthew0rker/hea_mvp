@@ -1,0 +1,540 @@
+[
+  {
+    "graph_id": "diabetes_918864ef",
+    "published_at": "2026-03-31T00:00:00+00:00",
+    "published": true,
+    "metadata": {
+      "title": "Type 2 Diabetes Risk Assessment",
+      "topic": "diabetes",
+      "description": "Short assessment for type 2 diabetes risk",
+      "tags": [
+        "diabetes",
+        "glucose",
+        "metabolic",
+        "risk"
+      ],
+      "entry_signals": [
+        "диабет",
+        "сахар",
+        "глюкоза",
+        "метаболический риск",
+        "fatigue",
+        "risk check"
+      ],
+      "questions_count": 8,
+      "estimated_time_minutes": 3,
+      "search_text": "Type 2 Diabetes Risk Assessment diabetes Возраст Индекс массы тела (ИМТ) Окружность талии (измеряется на уровне пупка) Регулярные физические упражнения Употребление в пищу овощей, фруктов, ягод Приём когда-либо гипотензивных лекарственных средств на регулярной основе"
+    },
+    "graph": {
+      "graph_version_id": "diabetes_918864ef",
+      "title": "Type 2 Diabetes Risk Assessment",
+      "topic": "diabetes",
+      "target_audience": null,
+      "questions": [
+        {
+          "id": "q1",
+          "text": "Возраст",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q1_opt1",
+              "label": "<45 лет",
+              "value": "lt_45",
+              "score": 0
+            },
+            {
+              "id": "q1_opt2",
+              "label": "45–54 лет",
+              "value": "45_54",
+              "score": 2
+            },
+            {
+              "id": "q1_opt3",
+              "label": "55–64 лет",
+              "value": "55_64",
+              "score": 3
+            },
+            {
+              "id": "q1_opt4",
+              "label": ">64 лет",
+              "value": "gt_64",
+              "score": 4
+            }
+          ],
+          "notes": "Можно ответить возрастом числом; runtime должен маппить в диапазон."
+        },
+        {
+          "id": "q2",
+          "text": "Индекс массы тела (ИМТ)",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q2_opt1",
+              "label": "<25 кг/м²",
+              "value": "lt_25",
+              "score": 0
+            },
+            {
+              "id": "q2_opt2",
+              "label": "25–30 кг/м²",
+              "value": "25_30",
+              "score": 1
+            },
+            {
+              "id": "q2_opt3",
+              "label": ">30 кг/м²",
+              "value": "gt_30",
+              "score": 3
+            }
+          ],
+          "notes": "Можно ответить числом ИМТ; runtime должен маппить в диапазон."
+        },
+        {
+          "id": "q3",
+          "text": "Окружность талии (измеряется на уровне пупка)",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q3_opt1",
+              "label": "Мужчина: <94 см",
+              "value": "male_lt_94",
+              "score": 0
+            },
+            {
+              "id": "q3_opt2",
+              "label": "Мужчина: 94–102 см",
+              "value": "male_94_102",
+              "score": 3
+            },
+            {
+              "id": "q3_opt3",
+              "label": "Мужчина: >102 см",
+              "value": "male_gt_102",
+              "score": 4
+            },
+            {
+              "id": "q3_opt4",
+              "label": "Женщина: <80 см",
+              "value": "female_lt_80",
+              "score": 0
+            },
+            {
+              "id": "q3_opt5",
+              "label": "Женщина: 80–88 см",
+              "value": "female_80_88",
+              "score": 3
+            },
+            {
+              "id": "q3_opt6",
+              "label": "Женщина: >88 см",
+              "value": "female_gt_88",
+              "score": 4
+            }
+          ],
+          "notes": "Для точного UX лучше спрашивать пол до этого вопроса. В текущем ремонте оставлено как единый вопрос с поло-зависимыми вариантами."
+        },
+        {
+          "id": "q4",
+          "text": "Регулярные физические упражнения",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q4_opt1",
+              "label": "Да",
+              "value": true,
+              "score": 0
+            },
+            {
+              "id": "q4_opt2",
+              "label": "Нет",
+              "value": false,
+              "score": 2
+            }
+          ],
+          "notes": "Ходьба в среднем темпе 30 минут в день или не менее 3 часов в неделю."
+        },
+        {
+          "id": "q5",
+          "text": "Употребление в пищу овощей, фруктов, ягод",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q5_opt1",
+              "label": "Каждый день",
+              "value": "daily",
+              "score": 0
+            },
+            {
+              "id": "q5_opt2",
+              "label": "Не каждый день",
+              "value": "not_daily",
+              "score": 2
+            }
+          ],
+          "notes": null
+        },
+        {
+          "id": "q6",
+          "text": "Приём когда-либо гипотензивных лекарственных средств на регулярной основе",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q6_opt1",
+              "label": "Нет",
+              "value": false,
+              "score": 0
+            },
+            {
+              "id": "q6_opt2",
+              "label": "Да",
+              "value": true,
+              "score": 2
+            }
+          ],
+          "notes": null
+        },
+        {
+          "id": "q7",
+          "text": "Выявление когда-либо уровня глюкозы в крови выше нормы",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q7_opt1",
+              "label": "Нет",
+              "value": false,
+              "score": 0
+            },
+            {
+              "id": "q7_opt2",
+              "label": "Да",
+              "value": true,
+              "score": 2
+            }
+          ],
+          "notes": "Например, при диспансерном обследовании, во время болезни или в период беременности."
+        },
+        {
+          "id": "q8",
+          "text": "Сахарный диабет (1-го или 2-го типа) у кого-либо из членов семьи или ближайших родственников",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "id": "q8_opt1",
+              "label": "Нет",
+              "value": "none",
+              "score": 0
+            },
+            {
+              "id": "q8_opt2",
+              "label": "Да: дедушка/бабушка, тётя/дядя, двоюродные братья/сёстры",
+              "value": "extended_family",
+              "score": 3
+            },
+            {
+              "id": "q8_opt3",
+              "label": "Да: родители, брат/сестра, ребёнок",
+              "value": "first_degree",
+              "score": 5
+            }
+          ],
+          "notes": null
+        }
+      ],
+      "risk_bands": [
+        {
+          "min_score": 0,
+          "max_score": 6,
+          "label": "Низкий риск",
+          "meaning": "Вероятность 1%"
+        },
+        {
+          "min_score": 7,
+          "max_score": 11,
+          "label": "Слегка повышен",
+          "meaning": "Вероятность 4%"
+        },
+        {
+          "min_score": 12,
+          "max_score": 14,
+          "label": "Умеренный риск",
+          "meaning": "Вероятность 17%"
+        },
+        {
+          "min_score": 15,
+          "max_score": 20,
+          "label": "Высокий риск",
+          "meaning": "Вероятность 33%"
+        },
+        {
+          "min_score": 21,
+          "max_score": 999,
+          "label": "Очень высокий риск",
+          "meaning": "Вероятность 50%"
+        }
+      ],
+      "scoring": {
+        "method": "sum_of_item_scores",
+        "notes": "Each selected option contributes its score; total score maps to a risk band."
+      },
+      "report_rules": [],
+      "safety_rules": [],
+      "source_draft": {
+        "language": "ru",
+        "understood": {
+          "topic": "diabetes",
+          "target_audience": null,
+          "questions_count": 8
+        },
+        "candidate_questions": [
+          {
+            "id": "q1",
+            "text": "Возраст",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q1_opt1",
+                "label": "<45 лет",
+                "value": "lt_45",
+                "score": 0
+              },
+              {
+                "id": "q1_opt2",
+                "label": "45–54 лет",
+                "value": "45_54",
+                "score": 2
+              },
+              {
+                "id": "q1_opt3",
+                "label": "55–64 лет",
+                "value": "55_64",
+                "score": 3
+              },
+              {
+                "id": "q1_opt4",
+                "label": ">64 лет",
+                "value": "gt_64",
+                "score": 4
+              }
+            ],
+            "notes": "Можно ответить возрастом числом; runtime должен маппить в диапазон."
+          },
+          {
+            "id": "q2",
+            "text": "Индекс массы тела (ИМТ)",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q2_opt1",
+                "label": "<25 кг/м²",
+                "value": "lt_25",
+                "score": 0
+              },
+              {
+                "id": "q2_opt2",
+                "label": "25–30 кг/м²",
+                "value": "25_30",
+                "score": 1
+              },
+              {
+                "id": "q2_opt3",
+                "label": ">30 кг/м²",
+                "value": "gt_30",
+                "score": 3
+              }
+            ],
+            "notes": "Можно ответить числом ИМТ; runtime должен маппить в диапазон."
+          },
+          {
+            "id": "q3",
+            "text": "Окружность талии (измеряется на уровне пупка)",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q3_opt1",
+                "label": "Мужчина: <94 см",
+                "value": "male_lt_94",
+                "score": 0
+              },
+              {
+                "id": "q3_opt2",
+                "label": "Мужчина: 94–102 см",
+                "value": "male_94_102",
+                "score": 3
+              },
+              {
+                "id": "q3_opt3",
+                "label": "Мужчина: >102 см",
+                "value": "male_gt_102",
+                "score": 4
+              },
+              {
+                "id": "q3_opt4",
+                "label": "Женщина: <80 см",
+                "value": "female_lt_80",
+                "score": 0
+              },
+              {
+                "id": "q3_opt5",
+                "label": "Женщина: 80–88 см",
+                "value": "female_80_88",
+                "score": 3
+              },
+              {
+                "id": "q3_opt6",
+                "label": "Женщина: >88 см",
+                "value": "female_gt_88",
+                "score": 4
+              }
+            ],
+            "notes": "Для точного UX лучше спрашивать пол до этого вопроса. В текущем ремонте оставлено как единый вопрос с поло-зависимыми вариантами."
+          },
+          {
+            "id": "q4",
+            "text": "Регулярные физические упражнения",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q4_opt1",
+                "label": "Да",
+                "value": true,
+                "score": 0
+              },
+              {
+                "id": "q4_opt2",
+                "label": "Нет",
+                "value": false,
+                "score": 2
+              }
+            ],
+            "notes": "Ходьба в среднем темпе 30 минут в день или не менее 3 часов в неделю."
+          },
+          {
+            "id": "q5",
+            "text": "Употребление в пищу овощей, фруктов, ягод",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q5_opt1",
+                "label": "Каждый день",
+                "value": "daily",
+                "score": 0
+              },
+              {
+                "id": "q5_opt2",
+                "label": "Не каждый день",
+                "value": "not_daily",
+                "score": 2
+              }
+            ],
+            "notes": null
+          },
+          {
+            "id": "q6",
+            "text": "Приём когда-либо гипотензивных лекарственных средств на регулярной основе",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q6_opt1",
+                "label": "Нет",
+                "value": false,
+                "score": 0
+              },
+              {
+                "id": "q6_opt2",
+                "label": "Да",
+                "value": true,
+                "score": 2
+              }
+            ],
+            "notes": null
+          },
+          {
+            "id": "q7",
+            "text": "Выявление когда-либо уровня глюкозы в крови выше нормы",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q7_opt1",
+                "label": "Нет",
+                "value": false,
+                "score": 0
+              },
+              {
+                "id": "q7_opt2",
+                "label": "Да",
+                "value": true,
+                "score": 2
+              }
+            ],
+            "notes": "Например, при диспансерном обследовании, во время болезни или в период беременности."
+          },
+          {
+            "id": "q8",
+            "text": "Сахарный диабет (1-го или 2-го типа) у кого-либо из членов семьи или ближайших родственников",
+            "question_type": "single_choice",
+            "options": [
+              {
+                "id": "q8_opt1",
+                "label": "Нет",
+                "value": "none",
+                "score": 0
+              },
+              {
+                "id": "q8_opt2",
+                "label": "Да: дедушка/бабушка, тётя/дядя, двоюродные братья/сёстры",
+                "value": "extended_family",
+                "score": 3
+              },
+              {
+                "id": "q8_opt3",
+                "label": "Да: родители, брат/сестра, ребёнок",
+                "value": "first_degree",
+                "score": 5
+              }
+            ],
+            "notes": null
+          }
+        ],
+        "candidate_scoring_rules": {
+          "method": "sum_of_item_scores",
+          "notes": "Each selected option contributes its score; total score maps to a risk band."
+        },
+        "candidate_risk_bands": [
+          {
+            "min_score": 0,
+            "max_score": 6,
+            "label": "Низкий риск",
+            "meaning": "Вероятность 1%"
+          },
+          {
+            "min_score": 7,
+            "max_score": 11,
+            "label": "Слегка повышен",
+            "meaning": "Вероятность 4%"
+          },
+          {
+            "min_score": 12,
+            "max_score": 14,
+            "label": "Умеренный риск",
+            "meaning": "Вероятность 17%"
+          },
+          {
+            "min_score": 15,
+            "max_score": 20,
+            "label": "Высокий риск",
+            "meaning": "Вероятность 33%"
+          },
+          {
+            "min_score": 21,
+            "max_score": 999,
+            "label": "Очень высокий риск",
+            "meaning": "Вероятность 50%"
+          }
+        ],
+        "candidate_report_requirements": [],
+        "candidate_safety_requirements": [],
+        "missing_fields": []
+      }
+    }
+  }
+]

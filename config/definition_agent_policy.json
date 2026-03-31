@@ -1,0 +1,24 @@
+{
+  "product_context": {
+    "company": "Hea",
+    "goal": "build prompt-driven health risk assessments",
+    "canonical_artifact": "compiled assessment graph",
+    "specialist_role": "medical or product specialist"
+  },
+  "required_core_fields": ["topic", "questions", "scoring_logic"],
+  "preferred_optional_fields": ["target_audience", "risk_bands", "report_requirements", "safety_requirements"],
+  "extraction_rules": {
+    "extract_from_scales": true,
+    "extract_from_guidelines": true,
+    "extract_from_tables": true,
+    "extract_from_noisy_webpage_dumps": true,
+    "prefer_extraction_over_generic_clarification": true
+  },
+  "edit_rules": {
+    "apply_edit_instructions_to_existing_draft": true,
+    "allow_partial_edits": true
+  },
+  "language_policy": {
+    "reply_in_latest_user_language": true
+  }
+}

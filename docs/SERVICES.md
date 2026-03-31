@@ -2,248 +2,185 @@
 
 ## 1. Service map
 
-The current MVP contains the following main runtime components:
-
 ### User-facing bots
 - Specialist Bot
-- Patient Bot
+- User Bot
 
 ### Internal services
 - Definition Agent
 - Compiler Agent
-- Runtime Agent
+- Patient Controller / Patient Orchestrator
+- Runtime Agent (legacy / optional)
 - Report Agent
 - Evaluation Agent
 
 ### Shared support modules
 - Together client wrapper
 - Input normalizer
-- Prompt / policy loader
+- JSON store
 - Published graph store
-- Shared schemas
+- Graph registry
+- Patient graph runtime helpers
+- Patient session store
 
 ---
 
 ## 2. Service catalog
 
-| Component | Type | Main responsibility |
+| Component | Type | Primary role |
 |---|---|---|
-| Specialist Bot | Telegram bot | Controller for specialist workflow, draft operations, compile/publish |
-| Patient Bot | Telegram bot | Entry point for patient assessment runtime |
-| Definition Agent | FastAPI service | Structured extraction and edit application over draft |
-| Compiler Agent | FastAPI service | Transform draft into compiled graph |
-| Runtime Agent | FastAPI service | Execute active graph for the patient |
-| Report Agent | FastAPI service | Generate patient-facing report |
-| Evaluation Agent | FastAPI service | Run validation / QA checks |
-| Published Graph Store | shared module | Persist and load currently active graph |
+| Specialist Bot | Telegram bot | specialist-side controller and workflow UI |
+| User Bot | Telegram bot | patient-side conversational entrypoint |
+| Definition Agent | FastAPI | extracts and edits structured assessment draft |
+| Compiler Agent | FastAPI | draft -> compiled graph |
+| Patient Controller | FastAPI | free conversation, graph discovery, consent, runtime orchestration |
+| Report Agent | FastAPI | result summary generation |
+| Evaluation Agent | FastAPI | validation / QA layer |
+| Published Graph Store | shared module | active graph persistence |
+| Graph Registry | shared module | searchable graph library |
+| Patient Session Store | shared module | patient conversation/session persistence |
+| Patient Graph Runtime | shared module | deterministic graph execution helpers |
 
 ---
 
-## 3. Component responsibilities
+## 3. Specialist-side services
 
 ### 3.1 Specialist Bot
 Responsibilities:
-- hold specialist session state
-- maintain current draft object
-- interpret latest message in conversational context
-- decide whether to:
-  - inspect draft
-  - update draft
-  - edit draft
-  - compile graph
-  - publish graph
-- generate natural final responses
+- accept specialist messages
+- maintain specialist session state
+- call definition agent
+- inspect draft state
+- call compiler
+- call publish
 
-Dependencies:
-- Definition Agent
-- Compiler Agent
-- Published Graph Store
-- Together AI (controller reasoning + final response generation)
-
-### 3.2 Patient Bot
+### 3.2 Definition Agent
 Responsibilities:
-- load current published graph
-- start patient conversation
-- forward patient turns into runtime flow
-- trigger report generation after completion
-
-Dependencies:
-- Published Graph Store
-- Runtime Agent
-- Report Agent
-
-### 3.3 Definition Agent
-Responsibilities:
-- parse noisy medical content
+- normalize noisy input
 - extract structured candidate fields
-- apply edit instructions to existing draft
-- keep merge logic stable even with imperfect model output
+- merge with current draft
+- apply edits
 
-Dependencies:
-- Together AI
-- Input normalizer
-- Policy files
-
-### 3.4 Compiler Agent
+### 3.3 Compiler Agent
 Responsibilities:
-- validate required draft structure
-- create compiled graph artifact
-- assign graph identifier
+- validate draft
+- compile graph
+- generate unique graph id
+- preserve enough metadata for runtime and registry
 
-Dependencies:
-- draft payload from specialist workflow
-
-### 3.5 Runtime Agent
+### 3.4 Publish Handoff
 Responsibilities:
-- drive graph-based patient flow
-- interpret patient responses
-- update runtime session state
-- decide when report generation should start
-
-Dependencies:
-- active published graph id / graph payload
-- patient bot session data
-
-### 3.6 Report Agent
-Responsibilities:
-- transform final session state into report output
-- produce concise patient-facing summary
-
-Dependencies:
-- runtime session state
-- graph payload
-
-### 3.7 Evaluation Agent
-Responsibilities:
-- validate graph integrity
-- validate runtime/report outputs
-- act as internal QA layer for future automated checks
+- persist active graph
+- update graph registry
+- expose graph to patient-side discovery and execution
 
 ---
 
-## 4. Ownership of data
+## 4. Patient-side services
+
+### 4.1 User Bot
+Responsibilities:
+- receive user messages
+- forward them to patient controller
+- return the controller’s reply
+
+### 4.2 Patient Controller
+Responsibilities:
+- analyze the user’s message and current mode
+- discover graph candidates
+- propose assessments
+- wait for consent
+- run selected graph
+- return results
+- move back into free conversation mode
+
+### 4.3 Graph Registry
+Responsibilities:
+- store graph metadata
+- support discovery/search
+- keep graph payloads available
+
+### 4.4 Patient Session Store
+Responsibilities:
+- persist patient conversation mode
+- persist selected graph
+- persist assessment runtime state
+- persist last result
+
+### 4.5 Patient Graph Runtime
+Responsibilities:
+- execute graph questions deterministically
+- normalize answers
+- advance graph state
+- compute score and result mapping
+
+---
+
+## 5. Supporting services
+
+### 5.1 Report Agent
+Used to build result summaries and structured output after completion.
+
+### 5.2 Evaluation Agent
+Used for:
+- graph checks
+- runtime consistency checks
+- report QA
+- future automated regression checks
+
+---
+
+## 6. Data ownership
 
 ### Specialist Bot owns
-- in-memory specialist session state
-- conversation history
-- current draft object reference
-- compiled graph id for the current session
+- specialist chat session
+- controller history
+- current draft reference
+- current compile/publish state
 
 ### Definition Agent owns
 - extraction logic
+- merge logic
 - edit application logic
-- merge/sanitization logic
+
+### Compiler Agent owns
+- graph compilation and unique graph id generation
 
 ### Published Graph Store owns
-- active graph record
-- publish registry
+- active graph persistence
 
-### Patient Bot owns
-- patient chat routing
-- current active graph lookup
+### Graph Registry owns
+- collection of published graph entries
+- graph discoverability metadata
 
-### Runtime Agent owns
-- runtime session state for patient interaction
+### Patient Controller owns
+- conversation mode transitions
+- graph discovery and selection
+- consent state
+- orchestration of runtime steps
 
-### Report Agent owns
-- final response formatting for patient result
+### Patient Session Store owns
+- patient session persistence
 
----
-
-## 5. Storage model
-
-### Shared published graph storage
-File-based MVP storage:
-- `data/active_graph.json`
-- `data/graph_registry.json`
-
-Purpose:
-- real publish handoff
-- shared visibility between specialist and patient bot
-- simple demo-friendly end-to-end integration
-
-### Why file storage is acceptable here
-For MVP:
-- low complexity
-- transparent behavior
-- easy debugging
-- enough for one active graph handoff flow
+### Patient Graph Runtime owns
+- deterministic execution and answer application
 
 ---
 
-## 6. Key runtime dependencies
+## 7. Current service flow
 
-### Specialist-side path
-Specialist Bot -> Definition Agent -> Compiler Agent -> Published Graph Store
+### Specialist flow
+Specialist Bot -> Definition Agent -> Compiler Agent -> Publish Store + Graph Registry
 
-### Patient-side path
-Patient Bot -> Published Graph Store -> Runtime Agent -> Report Agent
-
----
-
-## 7. Service contracts summary
-
-### Specialist Bot -> Definition Agent
-Operation:
-- `update`
-- `edit`
-
-Payload:
-- latest specialist message
-- conversation id
-- current draft
-- current language
-
-### Specialist Bot -> Compiler Agent
-Payload:
-- current draft
-
-### Specialist Bot -> Published Graph Store
-Payload:
-- compiled graph id
-- compiled graph payload
-- publish metadata
-
-### Patient Bot -> Runtime Agent
-Payload:
-- patient conversation id
-- latest patient message
-- active graph id
-
-### Patient Bot -> Report Agent
-Payload:
-- runtime session state
-- active graph payload
+### Patient flow
+User Bot -> Patient Controller -> Graph Registry / Session Store / Graph Runtime -> Result
 
 ---
 
-## 8. Operational behavior
+## 8. MVP operational note
 
-### Specialist Bot failure tolerance
-If controller-model reasoning fails:
-- specialist bot should fall back to deterministic action inference
-- bot must not crash user flow on provider exceptions
+At the current MVP stage:
+- some legacy services may still exist in the repository
+- the patient side should conceptually rely on **patient controller + graph registry + session store + graph runtime**
+- this is the architectural target model even if some old runtime code remains temporarily in the repo
 
-### Definition Agent failure tolerance
-If model returns malformed JSON:
-- sanitize before merge
-- keep merge logic stable
-- never trust raw model structure directly
-
-### Patient Bot failure tolerance
-If no graph is published:
-- bot must state clearly that no active graph is available
-- no fake runtime should start
-
----
-
-## 9. MVP extension path
-
-Likely future expansions:
-- persistent specialist sessions
-- graph version registry
-- multiple published graphs
-- explicit graph activation/deactivation
-- UI for draft inspection and editing
-- database-backed publish storage
-- dedicated graph runtime registry service

@@ -1,0 +1,211 @@
+{
+  "user_conv_815650181": {
+    "conversation_id": "user_conv_815650181",
+    "graph_id": "graph_v1_demo",
+    "status": "in_progress",
+    "language": "ru",
+    "current_node_id": "q3",
+    "answers": [
+      {
+        "node_id": "q1",
+        "question_text": "Возраст",
+        "raw_answer": "кроме диабета что ты умеешь?",
+        "normalized_value": "кроме диабета что ты умеешь?",
+        "selected_option": null,
+        "score": 0.0
+      },
+      {
+        "node_id": "q2",
+        "question_text": "Индекс массы тела (ИМТ)",
+        "raw_answer": "парампапам",
+        "normalized_value": "парампапам",
+        "selected_option": null,
+        "score": 0.0
+      }
+    ],
+    "score_total": 0.0,
+    "result": null,
+    "history": [
+      {
+        "role": "user",
+        "content": "нет"
+      },
+      {
+        "role": "assistant",
+        "content": "Вопрос 5/8: Употребление в пищу овощей, фруктов, ягод\n\nВарианты ответа:\n1. Каждый день\n2. Не каждый день\n\nМожно ответить номером, текстом варианта или своими словами — я постараюсь понять смысл."
+      },
+      {
+        "role": "user",
+        "content": "не всегда"
+      },
+      {
+        "role": "assistant",
+        "content": "Вопрос 6/8: Приём когда-либо гипотензивных лекарственных средств на регулярной основе\n\nВарианты ответа:\n1. Нет\n2. Да\n\nМожно ответить номером, текстом варианта или своими словами — я постараюсь понять смысл."
+      },
+      {
+        "role": "user",
+        "content": "не помню"
+      },
+      {
+        "role": "assistant",
+        "content": "Я не смог понять ответ. Давайте попробуем ещё раз.\n\nВопрос 6/8: Приём когда-либо гипотензивных лекарственных средств на регулярной основе\n\nВарианты ответа:\n1. Нет\n2. Да\n\nМожно ответить номером, текстом варианта или своими словами — я постараюсь понять смысл."
+      },
+      {
+        "role": "user",
+        "content": "нет"
+      },
+      {
+        "role": "assistant",
+        "content": "Вопрос 7/8: Выявление когда-либо уровня глюкозы в крови выше нормы\n\nВарианты ответа:\n1. Нет\n2. Да\n\nМожно ответить номером, текстом варианта или своими словами — я постараюсь понять смысл."
+      },
+      {
+        "role": "user",
+        "content": "да"
+      },
+      {
+        "role": "assistant",
+        "content": "Вопрос 8/8: Сахарный диабет (1-го или 2-го типа) у кого-либо из членов семьи или ближайших родственников\n\nВарианты ответа:\n1. Нет\n2. Да: дедушка/бабушка, тётя/дядя, двоюродные братья/сёстры\n3. Да: родители, брат/сестра, ребёнок\n\nМожно ответить номером, текстом варианта или своими словами — я постараюсь понять смысл."
+      },
+      {
+        "role": "user",
+        "content": "да"
+      },
+      {
+        "role": "assistant",
+        "content": "Спасибо, assessment завершён.\n\nТема: Type 2 Diabetes Risk Assessment\nСуммарный балл: 13\nКатегория результата: Умеренный риск\n\nЕсли хотите, я могу кратко объяснить результат или помочь подобрать другой assessment."
+      },
+      {
+        "role": "user",
+        "content": "обьясни"
+      },
+      {
+        "role": "assistant",
+        "content": "Я пока не нашёл явно подходящий assessment по этому описанию.\nМожете рассказать чуть подробнее, что именно вы хотите оценить, или спросить, какие assessments сейчас доступны."
+      },
+      {
+        "role": "user",
+        "content": "обьясни результат чо это значит"
+      },
+      {
+        "role": "assistant",
+        "content": "Тема: Type 2 Diabetes Risk Assessment\nСуммарный балл: 13.0\nКатегория: Умеренный риск"
+      },
+      {
+        "role": "user",
+        "content": "давай заново"
+      },
+      {
+        "role": "assistant",
+        "content": "Я пока не нашёл явно подходящий assessment по этому описанию.\nМожете рассказать чуть подробнее, что именно вы хотите оценить, или спросить, какие assessments сейчас доступны."
+      },
+      {
+        "role": "user",
+        "content": "а какие доступны?"
+      },
+      {
+        "role": "assistant",
+        "content": "Я пока не нашёл явно подходящий assessment по этому описанию.\nМожете рассказать чуть подробнее, что именно вы хотите оценить, или спросить, какие assessments сейчас доступны."
+      }
+    ],
+    "mode": "post_assessment",
+    "selected_graph_id": "diabetes_918864ef",
+    "discovered_graphs": [
+      "diabetes_918864ef"
+    ],
+    "consent_status": "accepted",
+    "assessment_state": {
+      "status": "completed",
+      "language": "ru",
+      "current_node_id": "result",
+      "answers": [
+        {
+          "node_id": "q1",
+          "question_text": "Возраст",
+          "raw_answer": "30 мне",
+          "normalized_value": "lt_45",
+          "selected_option": "<45 лет",
+          "score": 0.0
+        },
+        {
+          "node_id": "q2",
+          "question_text": "Индекс массы тела (ИМТ)",
+          "raw_answer": "2",
+          "normalized_value": "25_30",
+          "selected_option": "25–30 кг/м²",
+          "score": 1.0
+        },
+        {
+          "node_id": "q3",
+          "question_text": "Окружность талии (измеряется на уровне пупка)",
+          "raw_answer": "мужчина 94",
+          "normalized_value": "male_94_102",
+          "selected_option": "q3_opt2",
+          "score": 3.0
+        },
+        {
+          "node_id": "q4",
+          "question_text": "Регулярные физические упражнения",
+          "raw_answer": "нет",
+          "normalized_value": false,
+          "selected_option": "Нет",
+          "score": 2.0
+        },
+        {
+          "node_id": "q5",
+          "question_text": "Употребление в пищу овощей, фруктов, ягод",
+          "raw_answer": "не всегда",
+          "normalized_value": "not_daily",
+          "selected_option": "q5_opt2",
+          "score": 2.0
+        },
+        {
+          "node_id": "q6",
+          "question_text": "Приём когда-либо гипотензивных лекарственных средств на регулярной основе",
+          "raw_answer": "нет",
+          "normalized_value": false,
+          "selected_option": "Нет",
+          "score": 0.0
+        },
+        {
+          "node_id": "q7",
+          "question_text": "Выявление когда-либо уровня глюкозы в крови выше нормы",
+          "raw_answer": "да",
+          "normalized_value": true,
+          "selected_option": "Да",
+          "score": 2.0
+        },
+        {
+          "node_id": "q8",
+          "question_text": "Сахарный диабет (1-го или 2-го типа) у кого-либо из членов семьи или ближайших родственников",
+          "raw_answer": "да",
+          "normalized_value": "extended_family",
+          "selected_option": "Да: дедушка/бабушка, тётя/дядя, двоюродные братья/сёстры",
+          "score": 3.0
+        }
+      ],
+      "score_total": 13.0,
+      "result": {
+        "score_total": 13.0,
+        "risk_band": {
+          "min_score": 12,
+          "max_score": 14,
+          "label": "Умеренный риск",
+          "meaning": "Вероятность 17%"
+        },
+        "graph_title": "Type 2 Diabetes Risk Assessment",
+        "topic": "diabetes"
+      }
+    },
+    "last_result": {
+      "score_total": 13.0,
+      "risk_band": {
+        "min_score": 12,
+        "max_score": 14,
+        "label": "Умеренный риск",
+        "meaning": "Вероятность 17%"
+      },
+      "graph_title": "Type 2 Diabetes Risk Assessment",
+      "topic": "diabetes"
+    }
+  }
+}
