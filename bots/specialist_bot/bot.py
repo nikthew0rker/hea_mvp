@@ -1,7 +1,6 @@
 import asyncio
+import json
 from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
 from typing import Any
 
 from aiogram import Bot, Dispatcher, F
@@ -12,238 +11,75 @@ from shared.config import get_settings
 from shared.http_client import post_json
 from shared.input_normalizer import detect_language
 from shared.prompt_loader import load_json_file
+from shared.published_graph_store import publish_graph
+from shared.together_client import TogetherAIClient
 
 settings = get_settings()
 dp = Dispatcher()
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-BOT_POLICY_PATH = BASE_DIR / "config" / "specialist_bot_policy.json"
-
-
-class SpecialistState(str, Enum):
-    IDLE = "idle"
-    COLLECTING_DEFINITION = "collecting_definition"
-    CLARIFYING_DEFINITION = "clarifying_definition"
-    READY_TO_COMPILE = "ready_to_compile"
-    COMPILE_IN_PROGRESS = "compile_in_progress"
-    COMPILED = "compiled"
-
-
-class SpecialistIntent(str, Enum):
-    GREETING = "greeting"
-    LANGUAGE_SWITCH = "language_switch"
-    HELP = "help"
-    START_OR_CONTINUE_DEFINITION = "start_or_continue_definition"
-    ASK_SUMMARY = "ask_summary"
-    ASK_WHAT_NEXT = "ask_what_next"
-    COMPILE_REQUEST = "compile_request"
-    PUBLISH_REQUEST = "publish_request"
-    RESTART_REQUEST = "restart_request"
+CONTROLLER_POLICY = load_json_file("config/specialist_controller_policy.json")
 
 
 @dataclass
 class SpecialistSession:
+    """
+    One specialist-side session.
+
+    The bot works around a live draft object instead of a rigid script.
+    """
     chat_id: int
     conversation_id: str
-    state: SpecialistState = SpecialistState.IDLE
     language: str = "ru"
     draft: dict[str, Any] = field(default_factory=dict)
-    last_structured_result: dict[str, Any] | None = None
     compiled_graph_id: str | None = None
+    last_compiled_graph: dict[str, Any] | None = None
+    history: list[dict[str, str]] = field(default_factory=list)
+    current_focus: str | None = None
 
 
 SESSIONS: dict[int, SpecialistSession] = {}
 
 
 def get_or_create_session(chat_id: int) -> SpecialistSession:
+    """
+    Return an existing session or create a new one.
+    """
     if chat_id not in SESSIONS:
         SESSIONS[chat_id] = SpecialistSession(
             chat_id=chat_id,
-            conversation_id=f"specialist_chat_{chat_id}",
+            conversation_id=f"specialist_chat_{chat_id}"
         )
     return SESSIONS[chat_id]
 
 
-def detect_rule_based_intent(text: str) -> SpecialistIntent | None:
-    t = text.lower().strip()
-    if any(x in t for x in ["привет", "здравствуй", "здравствуйте", "hello", "hi", "hey"]):
-        return SpecialistIntent.GREETING
-    if any(x in t for x in ["помощь", "help", "что ты умеешь", "как работать"]):
-        return SpecialistIntent.HELP
-    if any(x in t for x in ["русский", "по-русски", "english", "speak english", "speak russian"]):
-        return SpecialistIntent.LANGUAGE_SWITCH
-    if any(x in t for x in ["summary", "черновик", "сводка", "что уже собрано"]):
-        return SpecialistIntent.ASK_SUMMARY
-    if any(x in t for x in ["что дальше", "what next", "next step"]):
-        return SpecialistIntent.ASK_WHAT_NEXT
-    if any(x in t for x in ["скомпилируй", "compile", "собери граф"]):
-        return SpecialistIntent.COMPILE_REQUEST
-    if any(x in t for x in ["publish", "опубликуй", "публикуй"]):
-        return SpecialistIntent.PUBLISH_REQUEST
-    if any(x in t for x in ["начать заново", "сначала", "restart", "reset"]):
-        return SpecialistIntent.RESTART_REQUEST
-    return None
+def trim_history(history: list[dict[str, str]], max_items: int = 12) -> list[dict[str, str]]:
+    """
+    Keep only the last N dialogue turns for controller context.
+    """
+    return history[-max_items:]
 
 
-def render_greeting(language: str) -> str:
-    if language == "ru":
-        return (
-            "Привет. Я могу общаться по-русски и помочь собрать health-assessment для Hea.\n\n"
-            "Ты можешь описать идею в свободной форме: тему, аудиторию, вопросы, шкалу, guideline, "
-            "таблицу, кусок статьи или даже сырой noisy текст — я попробую извлечь структуру "
-            "и подскажу, чего не хватает."
-        )
-    return (
-        "Hi. I can help you build a health assessment for Hea.\n\n"
-        "You can describe the idea in free form: topic, audience, questions, scale, guideline, "
-        "table, article fragment, or even a noisy pasted document — I will try to extract structure "
-        "and tell you what is still missing."
-    )
-
-
-def render_help(language: str) -> str:
-    if language == "ru":
-        return (
-            "Лучше всего просто прислать материал в свободной форме.\n\n"
-            "Я умею работать с:\n"
-            "- обычным текстовым описанием\n"
-            "- списком вопросов\n"
-            "- шкалой с баллами\n"
-            "- таблицей порогов риска\n"
-            "- кусками guideline\n"
-            "- noisy вставками с сайта\n\n"
-            "После этого я постараюсь:\n"
-            "1. выделить тему\n"
-            "2. вытащить вопросы\n"
-            "3. распознать scoring\n"
-            "4. распознать risk bands\n"
-            "5. задать только следующий полезный вопрос"
-        )
-    return (
-        "The best way is to send the material in free form.\n\n"
-        "I can work with:\n"
-        "- plain text description\n"
-        "- question list\n"
-        "- scored scale\n"
-        "- risk threshold table\n"
-        "- guideline fragments\n"
-        "- noisy webpage dumps\n\n"
-        "Then I will try to:\n"
-        "1. identify the topic\n"
-        "2. extract questions\n"
-        "3. extract scoring\n"
-        "4. extract risk bands\n"
-        "5. ask only the most useful next question"
-    )
-
-
-def render_what_next(language: str, state: SpecialistState) -> str:
-    if language == "ru":
-        mapping = {
-            SpecialistState.IDLE: "Опиши идею ассессмента или вставь шкалу / guideline — я начну собирать definition.",
-            SpecialistState.COLLECTING_DEFINITION: "Я собираю структуру definition. Можно прислать ещё вопросы, таблицу скоринга или пороги риска.",
-            SpecialistState.CLARIFYING_DEFINITION: "Сейчас лучше ответить на мой уточняющий вопрос, чтобы закрыть недостающие поля.",
-            SpecialistState.READY_TO_COMPILE: "Черновик уже выглядит достаточно полным. Если хочешь, я попробую компиляцию.",
-            SpecialistState.COMPILE_IN_PROGRESS: "Сейчас идёт компиляция graph.",
-            SpecialistState.COMPILED: "Graph уже собран. Следующий шаг — summary, review или publish.",
-        }
-        return mapping[state]
-    mapping = {
-        SpecialistState.IDLE: "Describe the assessment idea or paste a scale / guideline — I will start building the definition.",
-        SpecialistState.COLLECTING_DEFINITION: "I am collecting the definition structure. You can send more questions, scoring tables, or risk thresholds.",
-        SpecialistState.CLARIFYING_DEFINITION: "The best next step is to answer my clarification question so I can close the missing fields.",
-        SpecialistState.READY_TO_COMPILE: "The draft already looks complete enough. If you want, I can try compilation.",
-        SpecialistState.COMPILE_IN_PROGRESS: "Graph compilation is currently in progress.",
-        SpecialistState.COMPILED: "The graph is already compiled. Next step: summary, review, or publish.",
+def draft_summary(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Build a compact summary of the current draft for controller reasoning.
+    """
+    understood = draft.get("understood", {}) or {}
+    return {
+        "topic": understood.get("topic"),
+        "target_audience": understood.get("target_audience"),
+        "questions_count": len(draft.get("candidate_questions", []) or []),
+        "risk_bands_count": len(draft.get("candidate_risk_bands", []) or []),
+        "has_scoring": bool((draft.get("candidate_scoring_rules") or {}).get("method")),
+        "missing_fields": draft.get("missing_fields", []) or [],
+        "has_report_requirements": bool(draft.get("candidate_report_requirements")),
+        "has_safety_requirements": bool(draft.get("candidate_safety_requirements"))
     }
-    return mapping[state]
 
 
-def render_structured_reply(language: str, result: dict[str, Any]) -> str:
-    understood = result.get("understood", {}) or {}
-    missing_fields = result.get("missing_fields", []) or []
-    status = result.get("status")
-    next_question = result.get("suggested_next_question")
-    questions = result.get("candidate_questions", []) or []
-    risk_bands = result.get("candidate_risk_bands", []) or []
-
-    if language == "ru":
-        parts = []
-        topic = understood.get("topic")
-        audience = understood.get("target_audience")
-        questions_count = understood.get("questions_count") or len(questions)
-
-        if topic or audience or questions_count:
-            parts.append("Я уже понял следующее:")
-            if topic:
-                parts.append(f"- тема: {topic}")
-            if audience:
-                parts.append(f"- аудитория: {audience}")
-            if questions_count:
-                parts.append(f"- вопросов распознано: {questions_count}")
-            if risk_bands:
-                parts.append(f"- диапазонов риска распознано: {len(risk_bands)}")
-            parts.append("")
-        else:
-            parts.append("Я частично разобрал материал, но пока структура ещё не полная.")
-            parts.append("")
-
-        if status == "ready_to_compile":
-            parts.append("Похоже, черновик уже достаточно полный для следующего шага.")
-            parts.append("Могу попробовать собрать compiled graph. Напиши: `скомпилируй`.")
-            return "\n".join(parts)
-
-        if missing_fields:
-            parts.append("Пока ещё не хватает:")
-            for item in missing_fields:
-                parts.append(f"- {item}")
-            parts.append("")
-
-        if next_question:
-            parts.append(next_question)
-        else:
-            parts.append("Можешь прислать следующий кусок материала, и я продолжу собирать definition.")
-        return "\n".join(parts)
-
-    parts = []
-    topic = understood.get("topic")
-    audience = understood.get("target_audience")
-    questions_count = understood.get("questions_count") or len(questions)
-
-    if topic or audience or questions_count:
-        parts.append("Here is what I already understand:")
-        if topic:
-            parts.append(f"- topic: {topic}")
-        if audience:
-            parts.append(f"- target audience: {audience}")
-        if questions_count:
-            parts.append(f"- extracted questions: {questions_count}")
-        if risk_bands:
-            parts.append(f"- extracted risk bands: {len(risk_bands)}")
-        parts.append("")
-    else:
-        parts.append("I partially parsed the material, but the structure is not complete yet.")
-        parts.append("")
-
-    if status == "ready_to_compile":
-        parts.append("The draft looks complete enough for the next step.")
-        parts.append("I can try to build the compiled graph now. Type: `compile`.")
-        return "\n".join(parts)
-
-    if missing_fields:
-        parts.append("I am still missing:")
-        for item in missing_fields:
-            parts.append(f"- {item}")
-        parts.append("")
-
-    if next_question:
-        parts.append(next_question)
-    else:
-        parts.append("You can send the next piece of material and I will continue building the definition.")
-    return "\n".join(parts)
-
-
-async def call_definition_agent(session: SpecialistSession, text: str) -> dict[str, Any]:
+async def call_definition_agent(session: SpecialistSession, text: str, operation: str = "update") -> dict[str, Any]:
+    """
+    Call the Definition Agent to update or edit the draft.
+    """
     return await post_json(
         f"{settings.definition_agent_url}/draft",
         {
@@ -252,149 +88,465 @@ async def call_definition_agent(session: SpecialistSession, text: str) -> dict[s
             "current_draft": session.draft,
             "current_language": session.language,
             "conversation_summary": None,
-        },
+            "operation": operation
+        }
     )
 
 
 async def call_compiler_agent(session: SpecialistSession) -> dict[str, Any]:
+    """
+    Call the Compiler Agent with the current draft.
+    """
     return await post_json(
         f"{settings.compiler_agent_url}/compile",
-        {"draft": session.draft},
+        {"draft": session.draft}
     )
 
 
-async def handle_specialist_text(session: SpecialistSession, text: str) -> str:
-    session.language = detect_language(text)
-    intent = detect_rule_based_intent(text) or SpecialistIntent.START_OR_CONTINUE_DEFINITION
+def view_preview(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return a compact preview of the current draft object.
+    """
+    understood = draft.get("understood", {}) or {}
+    questions = draft.get("candidate_questions", []) or []
+    scoring = draft.get("candidate_scoring_rules", {}) or {}
+    risk_bands = draft.get("candidate_risk_bands", []) or []
+    missing_fields = draft.get("missing_fields", []) or []
 
-    if intent in {SpecialistIntent.GREETING, SpecialistIntent.LANGUAGE_SWITCH}:
-        return render_greeting(session.language)
+    return {
+        "topic": understood.get("topic"),
+        "target_audience": understood.get("target_audience"),
+        "questions_count": len(questions),
+        "risk_bands_count": len(risk_bands),
+        "scoring": scoring,
+        "missing_fields": missing_fields
+    }
 
-    if intent == SpecialistIntent.HELP:
-        return render_help(session.language)
 
-    if intent == SpecialistIntent.ASK_WHAT_NEXT:
-        return render_what_next(session.language, session.state)
+def view_questions(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return extracted questions from the draft.
+    """
+    return {"questions": draft.get("candidate_questions", []) or []}
 
-    if intent == SpecialistIntent.RESTART_REQUEST:
-        session.state = SpecialistState.IDLE
-        session.draft = {}
-        session.last_structured_result = None
-        session.compiled_graph_id = None
-        return (
-            "Ок, начинаем заново. Пришли новую идею, шкалу или guideline."
-            if session.language == "ru"
-            else
-            "Okay, let's start from scratch. Send a new idea, scale, or guideline."
-        )
 
-    if intent == SpecialistIntent.ASK_SUMMARY:
-        if not session.last_structured_result:
-            return (
-                "Пока у меня нет собранного черновика."
-                if session.language == "ru"
-                else
-                "I do not have a collected draft yet."
-            )
-        return render_structured_reply(session.language, session.last_structured_result)
+def view_scoring(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return extracted scoring rules.
+    """
+    return {"scoring": draft.get("candidate_scoring_rules", {}) or {}}
 
-    if intent == SpecialistIntent.COMPILE_REQUEST:
-        if not session.draft:
-            return (
-                "Пока нечего компилировать: сначала пришли описание ассессмента или шкалу."
-                if session.language == "ru"
-                else
-                "There is nothing to compile yet: first send the assessment description or scale."
-            )
 
-        session.state = SpecialistState.COMPILE_IN_PROGRESS
-        try:
-            compile_result = await call_compiler_agent(session)
-        except Exception:
-            session.state = SpecialistState.READY_TO_COMPILE
-            return (
-                "Во время компиляции произошла ошибка. Попробуй ещё раз позже."
-                if session.language == "ru"
-                else
-                "A compilation error occurred. Please try again later."
-            )
+def view_risk_bands(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return extracted risk bands.
+    """
+    return {"risk_bands": draft.get("candidate_risk_bands", []) or []}
 
-        if compile_result.get("status") == "compiled":
-            session.state = SpecialistState.COMPILED
-            session.compiled_graph_id = compile_result.get("graph_version_id")
-            return (
-                f"Готово — graph успешно собран.\n\ngraph_version_id: {session.compiled_graph_id}"
-                if session.language == "ru"
-                else
-                f"Done — the graph was compiled successfully.\n\ngraph_version_id: {session.compiled_graph_id}"
-            )
 
-        session.state = SpecialistState.CLARIFYING_DEFINITION
-        feedback = compile_result.get("feedback", [])
-        base = ["Я попробовал собрать graph, но пока есть проблемы:"] if session.language == "ru" else ["I tried to compile the graph, but there are still issues:"]
-        for item in feedback:
-            base.append(f"- {item}")
-        return "\n".join(base)
+def view_report_rules(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return extracted report requirements.
+    """
+    return {"report_rules": draft.get("candidate_report_requirements", []) or []}
 
-    if intent == SpecialistIntent.PUBLISH_REQUEST:
-        if session.state != SpecialistState.COMPILED:
-            return (
-                "Publish пока недоступен: сначала нужно успешно собрать graph."
-                if session.language == "ru"
-                else
-                "Publish is not available yet: the graph must be compiled first."
-            )
-        return (
-            "В этом scaffold publish пока не реализован как отдельный шаг, но graph уже собран."
-            if session.language == "ru"
-            else
-            "In this scaffold, publish is not implemented as a separate step yet, but the graph is already compiled."
-        )
+
+def view_safety_rules(draft: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return extracted safety requirements.
+    """
+    return {"safety_rules": draft.get("candidate_safety_requirements", []) or []}
+
+
+def fallback_action_from_message(message: str) -> str:
+    """
+    Cheap fallback action selection when the controller model is unavailable.
+
+    This prevents the specialist bot from failing hard on provider/API errors.
+    """
+    low = message.lower().strip()
+
+    if "опубли" in low or "publish" in low:
+        return "PUBLISH_GRAPH"
+    if "скомпил" in low or "compile" in low:
+        return "COMPILE_DRAFT"
+    if ("покажи" in low and "вопрос" in low) or "show questions" in low:
+        return "SHOW_QUESTIONS"
+    if ("покажи" in low and "скор" in low) or "show scoring" in low:
+        return "SHOW_SCORING"
+    if ("покажи" in low and "risk" in low) or ("покажи" in low and "диапаз" in low) or "show risk" in low:
+        return "SHOW_RISK_BANDS"
+    if "что ты понял" in low or "что получилось" in low or "preview" in low or "what did you understand" in low:
+        return "SHOW_PREVIEW"
+    if "измени" in low or "поменяй" in low or "change" in low or "edit" in low or "убери" in low or "добавь" in low:
+        return "APPLY_EDIT_INSTRUCTION"
+    if "что дальше" in low or "what next" in low:
+        return "EXPLAIN_NEXT_STEP"
+    return "UPDATE_DRAFT_FROM_INPUT"
+
+
+async def controller_plan(session: SpecialistSession, latest_message: str) -> dict[str, Any]:
+    """
+    Use the controller model to decide what action should happen next.
+    """
+    llm = TogetherAIClient(model=settings.specialist_controller_model)
+
+    system_prompt = (
+        "You are the specialist-side controller for a Telegram copilot that helps build "
+        "health-assessment graphs.\n\n"
+        f"Policy:\n{json.dumps(CONTROLLER_POLICY, ensure_ascii=False, indent=2)}\n\n"
+        "Return only valid JSON with keys:\n"
+        "- action\n"
+        "- confidence\n"
+        "- reason_short\n"
+        "- clarification_target\n\n"
+        "Rules:\n"
+        "- choose exactly one action from allowed_actions\n"
+        "- if the user asks what you understood, choose SHOW_PREVIEW\n"
+        "- if the user asks to show questions, choose SHOW_QUESTIONS\n"
+        "- if the user asks to show scoring, choose SHOW_SCORING\n"
+        "- if the user asks to show risk bands, choose SHOW_RISK_BANDS\n"
+        "- if the user pasted new medical content, choose UPDATE_DRAFT_FROM_INPUT\n"
+        "- if the user asks to change existing draft content, choose APPLY_EDIT_INSTRUCTION\n"
+        "- if the user asks to publish after compilation, choose PUBLISH_GRAPH\n"
+        "- if the user intent is unclear, choose ASK_CLARIFICATION\n"
+        "- stay inside the graph-building workflow\n"
+        "- do not provide diagnosis or treatment\n"
+    )
+
+    user_payload = {
+        "latest_message": latest_message,
+        "language": session.language,
+        "current_focus": session.current_focus,
+        "compiled_graph_id": session.compiled_graph_id,
+        "draft_summary": draft_summary(session.draft),
+        "recent_history": trim_history(session.history)
+    }
 
     try:
-        result = await call_definition_agent(session, text)
+        result = await llm.complete_json(
+            system_prompt=system_prompt,
+            user_prompt=json.dumps(user_payload, ensure_ascii=False, indent=2)
+        )
     except Exception:
-        return (
-            "Не удалось обновить definition из-за внутренней ошибки. Попробуй ещё раз через несколько секунд."
-            if session.language == "ru"
-            else
-            "I could not update the definition because of an internal error. Please try again in a few seconds."
+        result = None
+
+    if not isinstance(result, dict):
+        return {
+            "action": fallback_action_from_message(latest_message),
+            "confidence": 0.35,
+            "reason_short": "fallback",
+            "clarification_target": None
+        }
+
+    action = result.get("action")
+    if action not in CONTROLLER_POLICY["allowed_actions"]:
+        action = "ASK_CLARIFICATION"
+
+    try:
+        confidence = float(result.get("confidence", 0.5))
+    except Exception:
+        confidence = 0.5
+
+    return {
+        "action": action,
+        "confidence": confidence,
+        "reason_short": str(result.get("reason_short", "")),
+        "clarification_target": result.get("clarification_target")
+    }
+
+
+def fallback_render_reply(language: str, action: str, tool_result: dict[str, Any]) -> str:
+    """
+    Deterministic reply fallback if the controller renderer fails.
+    """
+    if language == "ru":
+        if action == "PUBLISH_GRAPH":
+            if tool_result.get("status") == "ok":
+                return (
+                    f"Граф опубликован. Активный graph_id: {tool_result.get('published_graph_id')}.\n\n"
+                    f"Теперь можно переходить к тесту patient assistant."
+                )
+            return "Не удалось опубликовать граф. Сначала нужно успешно собрать compiled graph."
+        if action == "COMPILE_DRAFT":
+            if tool_result.get("status") == "ok" and isinstance(tool_result.get("compile_result"), dict):
+                cr = tool_result["compile_result"]
+                if cr.get("status") == "compiled":
+                    return f"Граф успешно собран. graph_id: {cr.get('graph_version_id')}. Можно публиковать."
+            return "Не удалось собрать граф. Проверь draft и попробуй ещё раз."
+        if action == "SHOW_PREVIEW":
+            return "Вот preview текущего draft."
+        if action == "SHOW_QUESTIONS":
+            return "Вот вопросы, которые сейчас есть в draft."
+        if action == "SHOW_SCORING":
+            return "Вот текущий scoring."
+        if action == "SHOW_RISK_BANDS":
+            return "Вот текущие risk bands."
+        if action == "APPLY_EDIT_INSTRUCTION":
+            return "Я применил правку к draft. Могу показать результат или продолжить редактирование."
+        if action == "UPDATE_DRAFT_FROM_INPUT":
+            return "Я обновил draft на основе присланного материала. Могу показать, что получилось."
+        if action == "ASK_CLARIFICATION":
+            return "Уточни, пожалуйста, что именно ты хочешь сделать с текущим draft."
+        return "Ок, продолжаем работу с draft."
+    else:
+        if action == "PUBLISH_GRAPH":
+            if tool_result.get("status") == "ok":
+                return (
+                    f"The graph is published. Active graph_id: {tool_result.get('published_graph_id')}.\n\n"
+                    f"You can now move to patient assistant testing."
+                )
+            return "I could not publish the graph. The compiled graph must exist first."
+        if action == "COMPILE_DRAFT":
+            if tool_result.get("status") == "ok" and isinstance(tool_result.get("compile_result"), dict):
+                cr = tool_result["compile_result"]
+                if cr.get("status") == "compiled":
+                    return f"The graph was compiled successfully. graph_id: {cr.get('graph_version_id')}. You can publish it now."
+            return "I could not compile the graph. Please check the draft and try again."
+        if action == "SHOW_PREVIEW":
+            return "Here is the current draft preview."
+        if action == "SHOW_QUESTIONS":
+            return "Here are the questions currently in the draft."
+        if action == "SHOW_SCORING":
+            return "Here is the current scoring."
+        if action == "SHOW_RISK_BANDS":
+            return "Here are the current risk bands."
+        if action == "APPLY_EDIT_INSTRUCTION":
+            return "I applied the edit to the draft. I can show the result or continue editing."
+        if action == "UPDATE_DRAFT_FROM_INPUT":
+            return "I updated the draft from the material you sent. I can show what I understood."
+        if action == "ASK_CLARIFICATION":
+            return "Please clarify what exactly you want to do with the current draft."
+        return "Okay, let's continue working with the draft."
+
+
+async def render_final_reply(session: SpecialistSession, latest_message: str, action: str, tool_result: dict[str, Any]) -> str:
+    """
+    Ask the controller model to write the final natural reply.
+    """
+    llm = TogetherAIClient(model=settings.specialist_controller_model)
+
+    system_prompt = (
+        "You are a specialist-facing Telegram copilot for building health-assessment graphs.\n"
+        "Write one natural assistant reply in the user's current language.\n\n"
+        "Rules:\n"
+        "- do not output raw JSON\n"
+        "- do not sound like an API or state machine\n"
+        "- be helpful and concise\n"
+        "- explain what was understood or changed\n"
+        "- suggest the most useful next step\n"
+        "- stay inside the graph-building workflow\n"
+        "- do not provide diagnosis, treatment plans, or medication advice\n"
+    )
+
+    user_payload = {
+        "language": session.language,
+        "latest_message": latest_message,
+        "action": action,
+        "draft_summary": draft_summary(session.draft),
+        "tool_result": tool_result,
+        "current_focus": session.current_focus
+    }
+
+    try:
+        reply = await llm.complete_text(
+            system_prompt=system_prompt,
+            user_prompt=json.dumps(user_payload, ensure_ascii=False, indent=2)
+        )
+        if isinstance(reply, str) and reply.strip():
+            return reply.strip()
+    except Exception:
+        pass
+
+    return fallback_render_reply(session.language, action, tool_result)
+
+
+async def execute_action(session: SpecialistSession, action: str, latest_message: str) -> dict[str, Any]:
+    """
+    Execute one allowed controller action.
+    """
+    if action == "RESTART_WORKFLOW":
+        session.draft = {}
+        session.compiled_graph_id = None
+        session.last_compiled_graph = None
+        session.current_focus = None
+        return {"status": "reset"}
+
+    if action == "SHOW_PREVIEW":
+        session.current_focus = "preview"
+        return {"status": "ok", "preview": view_preview(session.draft)}
+
+    if action == "SHOW_QUESTIONS":
+        session.current_focus = "questions"
+        return {"status": "ok", "questions": view_questions(session.draft)}
+
+    if action == "SHOW_SCORING":
+        session.current_focus = "scoring"
+        return {"status": "ok", "scoring": view_scoring(session.draft)}
+
+    if action == "SHOW_RISK_BANDS":
+        session.current_focus = "risk_bands"
+        return {"status": "ok", "risk_bands": view_risk_bands(session.draft)}
+
+    if action == "SHOW_REPORT_RULES":
+        session.current_focus = "report_rules"
+        return {"status": "ok", "report_rules": view_report_rules(session.draft)}
+
+    if action == "SHOW_SAFETY_RULES":
+        session.current_focus = "safety_rules"
+        return {"status": "ok", "safety_rules": view_safety_rules(session.draft)}
+
+    if action == "UPDATE_DRAFT_FROM_INPUT":
+        session.current_focus = "draft_update"
+        result = await call_definition_agent(session, latest_message, operation="update")
+        session.draft = result.get("draft", {}) or session.draft
+        session.compiled_graph_id = None
+        session.last_compiled_graph = None
+        return {"status": "ok", "draft_update": result}
+
+    if action == "APPLY_EDIT_INSTRUCTION":
+        session.current_focus = "draft_edit"
+        result = await call_definition_agent(session, latest_message, operation="edit")
+        session.draft = result.get("draft", {}) or session.draft
+        session.compiled_graph_id = None
+        session.last_compiled_graph = None
+        return {"status": "ok", "draft_edit": result}
+
+    if action == "COMPILE_DRAFT":
+        session.current_focus = "compile"
+        if not session.draft:
+            return {"status": "error", "message": "No draft available"}
+
+        result = await call_compiler_agent(session)
+        if result.get("status") == "compiled":
+            session.compiled_graph_id = result.get("graph_version_id")
+            compiled_graph = result.get("graph")
+            if isinstance(compiled_graph, dict):
+                session.last_compiled_graph = compiled_graph
+            else:
+                session.last_compiled_graph = {
+                    "graph_version_id": session.compiled_graph_id,
+                    "source_draft": session.draft,
+                }
+        return {"status": "ok", "compile_result": result}
+
+    if action == "PUBLISH_GRAPH":
+        session.current_focus = "publish"
+        if not session.compiled_graph_id:
+            return {"status": "error", "message": "Graph is not compiled yet"}
+
+        graph_payload = session.last_compiled_graph or {
+            "graph_version_id": session.compiled_graph_id,
+            "source_draft": session.draft,
+        }
+
+        published = publish_graph(
+            graph_id=session.compiled_graph_id,
+            graph_payload=graph_payload,
+            metadata={
+                "draft_summary": draft_summary(session.draft),
+                "conversation_id": session.conversation_id,
+            },
         )
 
-    session.last_structured_result = result
-    session.draft = result.get("draft", {}) or session.draft
+        return {
+            "status": "ok",
+            "published_graph_id": session.compiled_graph_id,
+            "publish_result": published,
+        }
 
-    if result.get("status") == "ready_to_compile":
-        session.state = SpecialistState.READY_TO_COMPILE
-    elif result.get("status") == "needs_clarification":
-        session.state = SpecialistState.CLARIFYING_DEFINITION
-    else:
-        session.state = SpecialistState.COLLECTING_DEFINITION
+    if action == "EXPLAIN_NEXT_STEP":
+        session.current_focus = "next_step"
+        return {
+            "status": "ok",
+            "next_step_hint": {
+                "draft_summary": draft_summary(session.draft),
+                "compiled_graph_id": session.compiled_graph_id
+            }
+        }
 
-    return render_structured_reply(session.language, result)
+    if action == "ASK_CLARIFICATION":
+        session.current_focus = "clarification"
+        return {"status": "ok", "clarification_needed": True}
+
+    return {"status": "ok", "direct_reply": True}
+
+
+async def handle_specialist_text(session: SpecialistSession, latest_message: str) -> str:
+    """
+    Main controller loop for specialist-side conversation.
+    """
+    session.language = detect_language(latest_message)
+
+    low = latest_message.lower().strip()
+    if low == "/start":
+        return (
+            "Привет. Я помогу тебе собрать health-assessment graph для Hea."
+            if session.language == "ru"
+            else
+            "Hi. I will help you build a health-assessment graph for Hea."
+        )
+    if low == "/help":
+        return (
+            "Я могу принимать новый медицинский контент, показывать текущий draft, отдельно показывать вопросы / scoring / risk bands, вносить правки, компилировать и публиковать граф."
+            if session.language == "ru"
+            else
+            "I can accept new medical content, show the current draft, show questions / scoring / risk bands separately, apply edits, compile, and publish the graph."
+        )
+
+    plan = await controller_plan(session, latest_message)
+    action = plan["action"]
+    tool_result = await execute_action(session, action, latest_message)
+    reply = await render_final_reply(session, latest_message, action, tool_result)
+
+    session.history.append({"role": "user", "content": latest_message})
+    session.history.append({"role": "assistant", "content": reply})
+    session.history = trim_history(session.history, max_items=16)
+
+    return reply
 
 
 @dp.message(CommandStart())
 async def start_handler(message: Message) -> None:
+    """
+    Telegram /start handler.
+    """
     session = get_or_create_session(message.chat.id)
     session.language = "ru"
-    await message.answer(render_greeting("ru"))
+    await message.answer(
+        "Привет. Я помогу тебе собрать assessment graph для Hea. "
+        "Можешь прислать идею, шкалу, guideline, noisy текст, а я буду вести сессию как рабочий draft."
+    )
 
 
 @dp.message(Command("help"))
 async def help_handler(message: Message) -> None:
+    """
+    Telegram /help handler.
+    """
     session = get_or_create_session(message.chat.id)
-    await message.answer(render_help(session.language))
+    await message.answer(
+        "Я умею: принимать новый медицинский контент, показывать текущий draft, отдельно показывать вопросы / scoring / risk bands, вносить правки, компилировать и публиковать граф."
+        if session.language == "ru"
+        else
+        "I can accept new medical content, show the current draft, show questions / scoring / risk bands separately, apply edits, compile, and publish the graph."
+    )
 
 
 @dp.message(F.text)
 async def specialist_message_handler(message: Message) -> None:
+    """
+    Main specialist-message handler.
+    """
     session = get_or_create_session(message.chat.id)
     reply = await handle_specialist_text(session, message.text)
     await message.answer(reply)
 
 
 async def main() -> None:
+    """
+    Bot bootstrap.
+    """
     bot = Bot(token=settings.specialist_bot_token)
     await dp.start_polling(bot)
 

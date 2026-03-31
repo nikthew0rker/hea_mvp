@@ -8,12 +8,19 @@ class Settings(BaseSettings):
     """
     Shared project settings.
 
-    The purpose of this module is to keep all environment-based configuration
-    in one place and avoid hardcoding tokens or service URLs in code.
+    The specialist-side stack now uses:
+    - specialist_controller_model for controller reasoning
+    - definition_agent_model for structured extraction and edit application
     """
 
     together_api_key: str = Field(default="")
-    together_model: str = Field(default="meta-llama/Llama-4-Scout-17B-16E-Instruct")
+    together_model: str = Field(default="Qwen/Qwen3.5-9B")
+
+    specialist_controller_model: str = Field(default="zai-org/GLM-5")
+    definition_agent_model: str = Field(default="Qwen/Qwen3.5-397B-A17B")
+    runtime_agent_model: str = Field(default="Qwen/Qwen3.5-9B")
+    report_agent_model: str = Field(default="Qwen/Qwen3.5-9B")
+    evaluation_agent_model: str = Field(default="Qwen/Qwen3.5-9B")
 
     specialist_bot_token: str = Field(default="")
     user_bot_token: str = Field(default="")
@@ -34,6 +41,6 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """
-    Return one cached Settings instance for the process.
+    Return one cached Settings instance.
     """
     return Settings()

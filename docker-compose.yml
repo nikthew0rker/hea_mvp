@@ -64,6 +64,9 @@ services:
       - .env
     depends_on:
       - definition-agent
+      - compiler-agent
+    volumes:
+      - ./data:/app/data
 
   user-bot:
     build:
@@ -76,3 +79,5 @@ services:
     depends_on:
       - runtime-agent
       - report-agent
+    volumes:
+      - ./data:/app/data
