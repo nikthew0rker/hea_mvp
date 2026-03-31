@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message
@@ -12,81 +13,78 @@ settings = get_settings()
 dp = Dispatcher()
 
 
-def get_active_graph_context() -> dict | None:
-    """
-    Load the currently published graph record for patient assistant use.
-    """
-    return load_active_graph_record()
+def _has_runnable_graph(active: dict | None) -> bool:
+    if not isinstance(active, dict):
+        return False
+    graph = active.get("graph")
+    if not isinstance(graph, dict):
+        return False
+
+    if isinstance(graph.get("nodes"), list) and graph.get("nodes"):
+        return True
+    if isinstance(graph.get("questions"), list) and graph.get("questions"):
+        return True
+
+    source_draft = graph.get("source_draft", {})
+    if isinstance(source_draft, dict):
+        questions = source_draft.get("candidate_questions")
+        if isinstance(questions, list) and questions:
+            return True
+
+    return False
 
 
 @dp.message(CommandStart())
 async def start_handler(message: Message) -> None:
-    """
-    Entry point for the User Bot.
-
-    The patient assistant now reads the published active graph instead of using
-    a hardcoded demo graph id.
-    """
-    active = get_active_graph_context()
-    if not active:
+    active = load_active_graph_record()
+    if not _has_runnable_graph(active):
         await message.answer(
-            "Сейчас нет опубликованного графа для patient assistant. "
-            "Сначала опубликуйте граф из specialist bot."
+            "Сейчас нет опубликованного runnable graph для patient assistant. "
+            "Сначала опубликуйте graph из specialist bot."
         )
         return
 
-    graph_id = active.get("graph_id")
-    await message.answer(
-        f"Hi. I am your assessment bot. Active graph: {graph_id}. "
-        f"Tell me how you are doing, and I will guide you through the assessment. "
-        f"Type 'done' when you want to finish."
-    )
+    conversation_id = f"user_conv_{message.chat.id}"
+    try:
+        result = await post_json(
+            f"{settings.patient_controller_url}/chat",
+            {"conversation_id": conversation_id, "user_message": "/start"},
+        )
+    except httpx.HTTPError:
+        await message.answer(
+            "Patient controller is temporarily unavailable. Please try again in a moment."
+        )
+        return
+
+    await message.answer(result["reply_text"])
 
 
 @dp.message(F.text)
 async def user_message_handler(message: Message) -> None:
-    """
-    Handle end-user messages.
-
-    The bot:
-    - loads the currently published active graph
-    - sends the user message to the Runtime Agent
-    - if the session is finished, calls the Report Agent with the active graph payload
-    """
-    active = get_active_graph_context()
-    if not active:
+    active = load_active_graph_record()
+    if not _has_runnable_graph(active):
         await message.answer(
-            "No published graph is available yet. Please publish a graph from the specialist bot first."
+            "No runnable published graph is available yet. Please publish a graph from the specialist bot first."
         )
         return
 
-    graph_id = active.get("graph_id", "unknown_graph")
-    graph_payload = active.get("graph", {"graph_version_id": graph_id})
-
     conversation_id = f"user_conv_{message.chat.id}"
 
-    runtime_payload = {
-        "conversation_id": conversation_id,
-        "user_message": message.text,
-        "active_graph_version_id": graph_id,
-    }
+    try:
+        result = await post_json(
+            f"{settings.patient_controller_url}/chat",
+            {"conversation_id": conversation_id, "user_message": message.text},
+        )
+    except httpx.HTTPError:
+        await message.answer(
+            "Patient controller is temporarily unavailable. Please try again in a moment."
+        )
+        return
 
-    runtime_result = await post_json(f"{settings.runtime_agent_url}/message", runtime_payload)
-    await message.answer(runtime_result["reply_text"])
-
-    if runtime_result.get("should_generate_report"):
-        report_payload = {
-            "session_state": runtime_result["session_state"],
-            "graph": graph_payload,
-        }
-        report_result = await post_json(f"{settings.report_agent_url}/generate", report_payload)
-        await message.answer(f"Summary:\n{report_result['short_summary']}")
+    await message.answer(result["reply_text"])
 
 
 async def main() -> None:
-    """
-    Bot bootstrap.
-    """
     bot = Bot(token=settings.user_bot_token)
     await dp.start_polling(bot)
 

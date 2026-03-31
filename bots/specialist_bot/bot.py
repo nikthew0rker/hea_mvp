@@ -22,11 +22,6 @@ CONTROLLER_POLICY = load_json_file("config/specialist_controller_policy.json")
 
 @dataclass
 class SpecialistSession:
-    """
-    One specialist-side session.
-
-    The bot works around a live draft object instead of a rigid script.
-    """
     chat_id: int
     conversation_id: str
     language: str = "ru"
@@ -41,9 +36,6 @@ SESSIONS: dict[int, SpecialistSession] = {}
 
 
 def get_or_create_session(chat_id: int) -> SpecialistSession:
-    """
-    Return an existing session or create a new one.
-    """
     if chat_id not in SESSIONS:
         SESSIONS[chat_id] = SpecialistSession(
             chat_id=chat_id,
@@ -53,16 +45,10 @@ def get_or_create_session(chat_id: int) -> SpecialistSession:
 
 
 def trim_history(history: list[dict[str, str]], max_items: int = 12) -> list[dict[str, str]]:
-    """
-    Keep only the last N dialogue turns for controller context.
-    """
     return history[-max_items:]
 
 
 def draft_summary(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Build a compact summary of the current draft for controller reasoning.
-    """
     understood = draft.get("understood", {}) or {}
     return {
         "topic": understood.get("topic"),
@@ -77,9 +63,6 @@ def draft_summary(draft: dict[str, Any]) -> dict[str, Any]:
 
 
 async def call_definition_agent(session: SpecialistSession, text: str, operation: str = "update") -> dict[str, Any]:
-    """
-    Call the Definition Agent to update or edit the draft.
-    """
     return await post_json(
         f"{settings.definition_agent_url}/draft",
         {
@@ -94,9 +77,6 @@ async def call_definition_agent(session: SpecialistSession, text: str, operation
 
 
 async def call_compiler_agent(session: SpecialistSession) -> dict[str, Any]:
-    """
-    Call the Compiler Agent with the current draft.
-    """
     return await post_json(
         f"{settings.compiler_agent_url}/compile",
         {"draft": session.draft}
@@ -104,9 +84,6 @@ async def call_compiler_agent(session: SpecialistSession) -> dict[str, Any]:
 
 
 def view_preview(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Return a compact preview of the current draft object.
-    """
     understood = draft.get("understood", {}) or {}
     questions = draft.get("candidate_questions", []) or []
     scoring = draft.get("candidate_scoring_rules", {}) or {}
@@ -124,46 +101,26 @@ def view_preview(draft: dict[str, Any]) -> dict[str, Any]:
 
 
 def view_questions(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Return extracted questions from the draft.
-    """
     return {"questions": draft.get("candidate_questions", []) or []}
 
 
 def view_scoring(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Return extracted scoring rules.
-    """
     return {"scoring": draft.get("candidate_scoring_rules", {}) or {}}
 
 
 def view_risk_bands(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Return extracted risk bands.
-    """
     return {"risk_bands": draft.get("candidate_risk_bands", []) or []}
 
 
 def view_report_rules(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Return extracted report requirements.
-    """
     return {"report_rules": draft.get("candidate_report_requirements", []) or []}
 
 
 def view_safety_rules(draft: dict[str, Any]) -> dict[str, Any]:
-    """
-    Return extracted safety requirements.
-    """
     return {"safety_rules": draft.get("candidate_safety_requirements", []) or []}
 
 
 def fallback_action_from_message(message: str) -> str:
-    """
-    Cheap fallback action selection when the controller model is unavailable.
-
-    This prevents the specialist bot from failing hard on provider/API errors.
-    """
     low = message.lower().strip()
 
     if "опубли" in low or "publish" in low:
@@ -186,9 +143,6 @@ def fallback_action_from_message(message: str) -> str:
 
 
 async def controller_plan(session: SpecialistSession, latest_message: str) -> dict[str, Any]:
-    """
-    Use the controller model to decide what action should happen next.
-    """
     llm = TogetherAIClient(model=settings.specialist_controller_model)
 
     system_prompt = (
@@ -257,9 +211,6 @@ async def controller_plan(session: SpecialistSession, latest_message: str) -> di
 
 
 def fallback_render_reply(language: str, action: str, tool_result: dict[str, Any]) -> str:
-    """
-    Deterministic reply fallback if the controller renderer fails.
-    """
     if language == "ru":
         if action == "PUBLISH_GRAPH":
             if tool_result.get("status") == "ok":
@@ -321,9 +272,6 @@ def fallback_render_reply(language: str, action: str, tool_result: dict[str, Any
 
 
 async def render_final_reply(session: SpecialistSession, latest_message: str, action: str, tool_result: dict[str, Any]) -> str:
-    """
-    Ask the controller model to write the final natural reply.
-    """
     llm = TogetherAIClient(model=settings.specialist_controller_model)
 
     system_prompt = (
@@ -362,9 +310,6 @@ async def render_final_reply(session: SpecialistSession, latest_message: str, ac
 
 
 async def execute_action(session: SpecialistSession, action: str, latest_message: str) -> dict[str, Any]:
-    """
-    Execute one allowed controller action.
-    """
     if action == "RESTART_WORKFLOW":
         session.draft = {}
         session.compiled_graph_id = None
@@ -473,9 +418,6 @@ async def execute_action(session: SpecialistSession, action: str, latest_message
 
 
 async def handle_specialist_text(session: SpecialistSession, latest_message: str) -> str:
-    """
-    Main controller loop for specialist-side conversation.
-    """
     session.language = detect_language(latest_message)
 
     low = latest_message.lower().strip()
@@ -508,9 +450,6 @@ async def handle_specialist_text(session: SpecialistSession, latest_message: str
 
 @dp.message(CommandStart())
 async def start_handler(message: Message) -> None:
-    """
-    Telegram /start handler.
-    """
     session = get_or_create_session(message.chat.id)
     session.language = "ru"
     await message.answer(
@@ -521,9 +460,6 @@ async def start_handler(message: Message) -> None:
 
 @dp.message(Command("help"))
 async def help_handler(message: Message) -> None:
-    """
-    Telegram /help handler.
-    """
     session = get_or_create_session(message.chat.id)
     await message.answer(
         "Я умею: принимать новый медицинский контент, показывать текущий draft, отдельно показывать вопросы / scoring / risk bands, вносить правки, компилировать и публиковать граф."
@@ -535,18 +471,12 @@ async def help_handler(message: Message) -> None:
 
 @dp.message(F.text)
 async def specialist_message_handler(message: Message) -> None:
-    """
-    Main specialist-message handler.
-    """
     session = get_or_create_session(message.chat.id)
     reply = await handle_specialist_text(session, message.text)
     await message.answer(reply)
 
 
 async def main() -> None:
-    """
-    Bot bootstrap.
-    """
     bot = Bot(token=settings.specialist_bot_token)
     await dp.start_polling(bot)
 

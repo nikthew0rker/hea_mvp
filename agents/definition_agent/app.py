@@ -10,7 +10,7 @@ from shared.prompt_loader import load_json_file
 from shared.schemas import DraftRequest, DraftResponse
 from shared.together_client import TogetherAIClient
 
-app = FastAPI(title="Definition Agent", version="0.4.0")
+app = FastAPI(title="Definition Agent", version="0.4.1")
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 POLICY_PATH = BASE_DIR / "config" / "definition_agent_policy.json"
@@ -18,21 +18,11 @@ POLICY_PATH = BASE_DIR / "config" / "definition_agent_policy.json"
 
 @app.get("/health")
 async def health() -> dict:
-    """
-    Healthcheck endpoint for the Definition Agent.
-    """
     return {"status": "ok", "service": "definition-agent"}
 
 
 @app.post("/draft", response_model=DraftResponse)
 async def build_draft(payload: DraftRequest) -> DraftResponse:
-    """
-    Update or edit the current structured draft.
-
-    This implementation is hardened against malformed LLM JSON and supports:
-    - update mode for new medical content
-    - edit mode for natural-language changes over the current draft
-    """
     policy = load_json_file(str(POLICY_PATH))
     current_draft = payload.current_draft or {}
     language = payload.current_language or "ru"
@@ -73,9 +63,6 @@ async def _extract_with_llm(
     current_draft: dict[str, Any],
     conversation_summary: str | None,
 ) -> dict[str, Any]:
-    """
-    Extract assessment structure from normalized specialist input.
-    """
     settings = get_settings()
     llm = TogetherAIClient(model=settings.definition_agent_model)
 
@@ -117,9 +104,6 @@ async def _apply_edit_instruction(
     current_draft: dict[str, Any],
     language: str,
 ) -> dict[str, Any]:
-    """
-    Apply a natural-language edit instruction to the current draft.
-    """
     settings = get_settings()
     llm = TogetherAIClient(model=settings.definition_agent_model)
 
@@ -159,41 +143,26 @@ async def _apply_edit_instruction(
 
 
 def _ensure_dict(value: Any) -> dict[str, Any]:
-    """
-    Return a dict if the value is a dict, otherwise an empty dict.
-    """
     return value if isinstance(value, dict) else {}
 
 
 def _ensure_list(value: Any) -> list[Any]:
-    """
-    Return a list if the value is a list, otherwise an empty list.
-    """
     return value if isinstance(value, list) else []
 
 
 def _ensure_list_of_dicts(value: Any) -> list[dict[str, Any]]:
-    """
-    Keep only dict items from a list-like value.
-    """
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
 
 
 def _ensure_string_list(value: Any) -> list[str]:
-    """
-    Keep only string items from a list-like value.
-    """
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
 
 
 def _sanitize_llm_candidate(candidate: dict | None) -> dict[str, Any]:
-    """
-    Normalize model output into the shapes expected by merge logic.
-    """
     candidate = candidate if isinstance(candidate, dict) else {}
 
     suggested_next_question = candidate.get("suggested_next_question")
@@ -221,14 +190,6 @@ def merge_draft_state(
     llm_candidate: dict[str, Any],
     language: str,
 ) -> dict[str, Any]:
-    """
-    Merge current draft state, heuristics, and sanitized LLM extraction into one draft.
-
-    Priority:
-    1. explicit new LLM content
-    2. existing current draft
-    3. heuristic fallback
-    """
     current_draft = _ensure_dict(current_draft)
     heuristic = _ensure_dict(heuristic)
     llm_candidate = _sanitize_llm_candidate(llm_candidate)
@@ -319,9 +280,6 @@ def merge_draft_state(
 
 
 def build_next_question(missing_fields: list[str], language: str) -> str | None:
-    """
-    Build one useful next clarification question.
-    """
     if not missing_fields:
         return None
 
@@ -345,9 +303,6 @@ def build_next_question(missing_fields: list[str], language: str) -> str | None:
 
 
 def _merge_questions(*sources: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """
-    Merge question candidates while deduplicating by id and text.
-    """
     merged: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     seen_texts: set[str] = set()
@@ -393,9 +348,6 @@ def _merge_questions(*sources: list[list[dict[str, Any]]]) -> list[dict[str, Any
 
 
 def _merge_risk_bands(*sources: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """
-    Merge risk-band candidates while deduplicating by score range and label.
-    """
     merged: list[dict[str, Any]] = []
     seen: set[tuple[float, float, str]] = set()
 
@@ -433,9 +385,6 @@ def _merge_risk_bands(*sources: list[list[dict[str, Any]]]) -> list[dict[str, An
 
 
 def _merge_generic(*sources: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """
-    Merge generic requirement lists with text-based deduplication.
-    """
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
 

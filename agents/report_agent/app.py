@@ -1,13 +1,12 @@
 from fastapi import FastAPI
 
 from shared.schemas import ReportRequest, ReportResponse
-from shared.together_client import TogetherAIClient
 
-app = FastAPI(title="Report Agent", version="0.1.0")
+app = FastAPI(title="Report Agent", version="0.2.0")
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, str]:
     """
     Healthcheck endpoint for the Report Agent.
     """
@@ -17,37 +16,38 @@ async def health() -> dict:
 @app.post("/generate", response_model=ReportResponse)
 async def generate_report(payload: ReportRequest) -> ReportResponse:
     """
-    Build the final user-facing result.
-
-    The scaffold produces:
-    - a short Telegram-safe summary
-    - a fuller structured report object
+    Generate a lightweight patient summary from session state and graph payload.
     """
-    llm = TogetherAIClient()
+    session_state = payload.session_state or {}
+    graph = payload.graph or {}
 
-    system_prompt = (
-        "You are a report generation agent. "
-        "Produce a short, non-diagnostic, user-friendly summary. "
-        "Include a disclaimer. "
-        "Do not prescribe treatment or medication."
-    )
+    answers = session_state.get("answers", []) or []
+    score_total = session_state.get("score_total", 0)
+    risk_band = session_state.get("risk_band") or {}
 
-    user_prompt = (
-        f"Session state:\n{payload.session_state}\n\n"
-        f"Graph:\n{payload.graph}\n\n"
-        "Write a concise summary for Telegram."
-    )
+    topic = graph.get("topic") or graph.get("graph_version_id") or "assessment"
+    risk_label = risk_band.get("label") if isinstance(risk_band, dict) else None
 
-    short_summary = await llm.complete(system_prompt, user_prompt)
+    if risk_label:
+        short_summary = (
+            f"Assessment topic: {topic}. "
+            f"Completed answers: {len(answers)}. "
+            f"Total score: {score_total}. "
+            f"Risk category: {risk_label}."
+        )
+    else:
+        short_summary = (
+            f"Assessment topic: {topic}. "
+            f"Completed answers: {len(answers)}. "
+            f"Total score: {score_total}."
+        )
 
     full_report = {
-        "summary": short_summary,
-        "disclaimer": (
-            "This assessment is informational only and does not provide a medical diagnosis, "
-            "treatment plan, or medication recommendation."
-        ),
-        "session_state": payload.session_state,
-        "graph_version_id": payload.graph.get("graph_version_id"),
+        "topic": topic,
+        "answers_count": len(answers),
+        "score_total": score_total,
+        "risk_band": risk_band,
+        "answers": answers,
     }
 
     return ReportResponse(

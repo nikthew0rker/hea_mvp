@@ -8,15 +8,14 @@ class Settings(BaseSettings):
     """
     Shared project settings.
 
-    The specialist-side stack now uses:
-    - specialist_controller_model for controller reasoning
-    - definition_agent_model for structured extraction and edit application
+    This version includes patient-side controller settings.
     """
 
     together_api_key: str = Field(default="")
     together_model: str = Field(default="Qwen/Qwen3.5-9B")
 
     specialist_controller_model: str = Field(default="zai-org/GLM-5")
+    patient_controller_model: str = Field(default="zai-org/GLM-5")
     definition_agent_model: str = Field(default="Qwen/Qwen3.5-397B-A17B")
     runtime_agent_model: str = Field(default="Qwen/Qwen3.5-9B")
     report_agent_model: str = Field(default="Qwen/Qwen3.5-9B")
@@ -25,11 +24,12 @@ class Settings(BaseSettings):
     specialist_bot_token: str = Field(default="")
     user_bot_token: str = Field(default="")
 
-    definition_agent_url: str = Field(default="http://127.0.0.1:8101")
-    compiler_agent_url: str = Field(default="http://127.0.0.1:8102")
-    runtime_agent_url: str = Field(default="http://127.0.0.1:8103")
-    report_agent_url: str = Field(default="http://127.0.0.1:8104")
-    evaluation_agent_url: str = Field(default="http://127.0.0.1:8105")
+    definition_agent_url: str = Field(default="http://definition-agent:8000")
+    compiler_agent_url: str = Field(default="http://compiler-agent:8000")
+    runtime_agent_url: str = Field(default="http://runtime-agent:8000")
+    report_agent_url: str = Field(default="http://report-agent:8000")
+    evaluation_agent_url: str = Field(default="http://evaluation-agent:8000")
+    patient_controller_url: str = Field(default="http://patient-controller:8000")
 
     model_config = SettingsConfigDict(
         env_file=".env",

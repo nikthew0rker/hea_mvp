@@ -31,6 +31,8 @@ services:
       - .env
     ports:
       - "8103:8000"
+    volumes:
+      - ./data:/app/data
 
   report-agent:
     build:
@@ -53,6 +55,19 @@ services:
       - .env
     ports:
       - "8105:8000"
+
+  patient-controller:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        SERVICE_MODULE: agents.patient_controller.app:app
+    env_file:
+      - .env
+    ports:
+      - "8106:8000"
+    volumes:
+      - ./data:/app/data
 
   specialist-bot:
     build:
@@ -77,7 +92,6 @@ services:
     env_file:
       - .env
     depends_on:
-      - runtime-agent
-      - report-agent
+      - patient-controller
     volumes:
       - ./data:/app/data
