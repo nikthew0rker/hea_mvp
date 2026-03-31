@@ -6,9 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    Shared project settings.
-
-    This version includes patient-side controller settings.
+    Shared project settings including patient orchestration layer.
     """
 
     together_api_key: str = Field(default="")

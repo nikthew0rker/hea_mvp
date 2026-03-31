@@ -1,22 +1,19 @@
+import hashlib
+import re
+
 from fastapi import FastAPI
 
 from shared.schemas import CompileRequest, CompileResponse
 
-app = FastAPI(title="Compiler Agent", version="0.2.0")
+app = FastAPI(title="Compiler Agent", version="0.3.0")
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """
-    Healthcheck endpoint for the Compiler Agent.
-    """
     return {"status": "ok", "service": "compiler-agent"}
 
 
 def _missing_feedback(draft: dict) -> list[str]:
-    """
-    Determine blocking problems for compilation.
-    """
     feedback: list[str] = []
 
     understood = draft.get("understood", {}) or {}
@@ -34,11 +31,21 @@ def _missing_feedback(draft: dict) -> list[str]:
     return feedback
 
 
+def _slugify(value: str) -> str:
+    value = value.lower().strip()
+    value = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9]+", "_", value)
+    value = re.sub(r"_+", "_", value).strip("_")
+    return value or "assessment"
+
+
+def _build_graph_id(topic: str, questions: list[dict]) -> str:
+    seed = topic + "|" + "|".join(str(q.get("text", "")) for q in questions if isinstance(q, dict))
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
+    return f"{_slugify(topic)}_{digest}"
+
+
 @app.post("/compile", response_model=CompileResponse)
 async def compile_graph(payload: CompileRequest) -> CompileResponse:
-    """
-    Convert the current draft into a runtime-friendly graph artifact.
-    """
     draft = payload.draft or {}
     feedback = _missing_feedback(draft)
 
@@ -50,14 +57,19 @@ async def compile_graph(payload: CompileRequest) -> CompileResponse:
             feedback=feedback,
         )
 
-    topic = (draft.get("understood", {}) or {}).get("topic", "assessment")
-    graph_id = "graph_v1_demo"
+    understood = draft.get("understood", {}) or {}
+    topic = understood.get("topic", "assessment")
+    title = topic.replace("_", " ").title()
+
+    questions = draft.get("candidate_questions", []) or []
+    graph_id = _build_graph_id(str(topic), questions)
 
     graph = {
         "graph_version_id": graph_id,
+        "title": title,
         "topic": topic,
-        "target_audience": (draft.get("understood", {}) or {}).get("target_audience"),
-        "questions": draft.get("candidate_questions", []) or [],
+        "target_audience": understood.get("target_audience"),
+        "questions": questions,
         "risk_bands": draft.get("candidate_risk_bands", []) or [],
         "scoring": draft.get("candidate_scoring_rules", {}) or {},
         "report_rules": draft.get("candidate_report_requirements", []) or [],

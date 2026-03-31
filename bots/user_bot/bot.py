@@ -7,40 +7,22 @@ from aiogram.types import Message
 
 from shared.config import get_settings
 from shared.http_client import post_json
+from shared.graph_registry import list_graph_summaries
 from shared.published_graph_store import load_active_graph_record
 
 settings = get_settings()
 dp = Dispatcher()
 
 
-def _has_runnable_graph(active: dict | None) -> bool:
-    if not isinstance(active, dict):
-        return False
-    graph = active.get("graph")
-    if not isinstance(graph, dict):
-        return False
-
-    if isinstance(graph.get("nodes"), list) and graph.get("nodes"):
-        return True
-    if isinstance(graph.get("questions"), list) and graph.get("questions"):
-        return True
-
-    source_draft = graph.get("source_draft", {})
-    if isinstance(source_draft, dict):
-        questions = source_draft.get("candidate_questions")
-        if isinstance(questions, list) and questions:
-            return True
-
-    return False
+def _graph_library_available() -> bool:
+    return len(list_graph_summaries(limit=1)) > 0 or isinstance(load_active_graph_record(), dict)
 
 
 @dp.message(CommandStart())
 async def start_handler(message: Message) -> None:
-    active = load_active_graph_record()
-    if not _has_runnable_graph(active):
+    if not _graph_library_available():
         await message.answer(
-            "Сейчас нет опубликованного runnable graph для patient assistant. "
-            "Сначала опубликуйте graph из specialist bot."
+            "Сейчас библиотека assessment graphs пуста. Сначала опубликуйте хотя бы один graph из specialist bot."
         )
         return
 
@@ -61,10 +43,9 @@ async def start_handler(message: Message) -> None:
 
 @dp.message(F.text)
 async def user_message_handler(message: Message) -> None:
-    active = load_active_graph_record()
-    if not _has_runnable_graph(active):
+    if not _graph_library_available():
         await message.answer(
-            "No runnable published graph is available yet. Please publish a graph from the specialist bot first."
+            "There are no published graphs in the library yet. Please publish at least one graph from the specialist bot first."
         )
         return
 
