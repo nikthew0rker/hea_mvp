@@ -6,8 +6,8 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message
 
 from shared.config import get_settings
-from shared.http_client import post_json
 from shared.graph_registry import list_graph_summaries
+from shared.http_client import post_json
 from shared.published_graph_store import load_active_graph_record
 
 settings = get_settings()

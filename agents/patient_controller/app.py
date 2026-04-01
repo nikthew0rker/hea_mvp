@@ -10,9 +10,9 @@ from shared.patient_graph_runtime import (
     create_assessment_state,
     detect_language,
     explain_current_question,
+    explain_last_result,
     extract_runtime_graph,
     get_current_node,
-    graph_meta,
     help_with_current_question,
     infer_answer_deterministically,
     repeat_current_question,
@@ -21,7 +21,7 @@ from shared.patient_graph_runtime import (
 from shared.patient_session_store import load_session, save_session
 from shared.together_client import TogetherAIClient
 
-app = FastAPI(title="Patient Controller", version="1.0.0")
+app = FastAPI(title="Patient Controller", version="1.1.2")
 
 
 @app.get("/health")
@@ -47,11 +47,18 @@ def _is_greeting(message: str) -> bool:
     return low in {"привет", "здравствуй", "здравствуйте", "hello", "hi", "hey"}
 
 
+def _looks_like_acknowledgement(message: str) -> bool:
+    low = _normalize(message)
+    return low in {
+        "ок", "окей", "понял", "понятно", "хорошо", "отлично", "ясно",
+        "ok", "okay", "got it", "understood", "great", "fine",
+    }
+
+
 def _consent_from_message(message: str) -> str | None:
     low = _normalize(message)
     yes_words = {"да", "ок", "окей", "поехали", "начать", "давай", "хочу", "yes", "ok", "okay", "sure", "start", "let's start"}
     no_words = {"нет", "не хочу", "пока нет", "not now", "no", "later"}
-
     if low in yes_words:
         return "accepted"
     if low in no_words:
@@ -86,7 +93,7 @@ def _looks_like_repeat(message: str) -> bool:
 
 def _looks_like_pause(message: str) -> bool:
     low = _normalize(message)
-    return any(token in low for token in ["пауза", "pause", "потом", "later", "останов", "stop for now"])
+    return any(token in low for token in ["пауза", "pause", "потом", "later"])
 
 
 def _looks_like_resume(message: str) -> bool:
@@ -94,9 +101,34 @@ def _looks_like_resume(message: str) -> bool:
     return any(token in low for token in ["продолж", "resume", "continue", "дальше"])
 
 
+def _looks_like_cancel(message: str) -> bool:
+    low = _normalize(message)
+    return any(token in low for token in ["отмена", "стоп", "cancel", "stop", "не хочу продолжать", "хватит"])
+
+
 def _looks_like_result_request(message: str) -> bool:
     low = _normalize(message)
-    return any(token in low for token in ["результат", "итог", "summary", "result"])
+    return any(token in low for token in ["результат", "итог", "summary", "result", "дай результат"])
+
+
+def _looks_like_explain_last_result(message: str) -> bool:
+    low = _normalize(message)
+    return any(token in low for token in ["объясни", "обьясни", "что это значит", "explain", "what does it mean"])
+
+
+def _looks_like_detailed_report(message: str) -> bool:
+    low = _normalize(message)
+    return any(token in low for token in [
+        "подробный отчет",
+        "подробный отчёт",
+        "полный отчет",
+        "полный отчёт",
+        "детальный отчет",
+        "детальный отчёт",
+        "detailed report",
+        "full report",
+        "report",
+    ])
 
 
 def _default_session(conversation_id: str, language: str) -> dict[str, Any]:
@@ -113,8 +145,34 @@ def _default_session(conversation_id: str, language: str) -> dict[str, Any]:
     }
 
 
-def _capabilities_text(language: str) -> str:
+def _capabilities_text(language: str, in_assessment: bool = False) -> str:
     graphs = list_graph_summaries(limit=8)
+
+    if in_assessment:
+        if language == "ru":
+            return (
+                "Сейчас мы находимся внутри assessment.\n"
+                "Я могу:\n"
+                "- принять ваш ответ,\n"
+                "- повторить вопрос,\n"
+                "- объяснить, зачем он нужен,\n"
+                "- помочь с форматом ответа,\n"
+                "- поставить assessment на паузу,\n"
+                "- остановить его полностью.\n\n"
+                "После завершения я также могу помочь подобрать другой assessment."
+            )
+        return (
+            "We are currently inside an assessment.\n"
+            "I can:\n"
+            "- accept your answer,\n"
+            "- repeat the question,\n"
+            "- explain why it matters,\n"
+            "- help with the answer format,\n"
+            "- pause the assessment,\n"
+            "- stop it completely.\n\n"
+            "After completion I can also help choose another assessment."
+        )
+
     if not graphs:
         return (
             "Сейчас в библиотеке графов пока нет опубликованных assessments."
@@ -221,6 +279,52 @@ def _result_text(result: dict[str, Any] | None, language: str) -> str:
     )
 
 
+def _detailed_report_text(last_result: dict[str, Any] | None, language: str) -> str:
+    if not isinstance(last_result, dict):
+        return (
+            "Сейчас у меня нет завершённого результата для подробного отчёта."
+            if language == "ru"
+            else "I do not have a completed result for a detailed report right now."
+        )
+
+    graph_title = last_result.get("graph_title", "assessment")
+    score_total = last_result.get("score_total", "—")
+    risk_band = last_result.get("risk_band") or {}
+    label = risk_band.get("label", "—")
+    meaning = risk_band.get("meaning")
+
+    if language == "ru":
+        lines = [
+            f"Подробный отчёт по assessment «{graph_title}»:",
+            "",
+            f"- Итоговый балл: {score_total}",
+            f"- Категория результата: {label}",
+        ]
+        if meaning:
+            lines.append(f"- Интерпретация по логике graph: {meaning}")
+        lines.extend([
+            "",
+            "Это screening assessment result, а не диагноз.",
+            "Если хотите, я могу помочь подобрать другой assessment по новому запросу.",
+        ])
+        return "\n".join(lines)
+
+    lines = [
+        f"Detailed report for the assessment “{graph_title}”:",
+        "",
+        f"- Total score: {score_total}",
+        f"- Result category: {label}",
+    ]
+    if meaning:
+        lines.append(f"- Graph interpretation: {meaning}")
+    lines.extend([
+        "",
+        "This is a screening assessment result, not a diagnosis.",
+        "If you want, I can help choose another assessment for a new concern.",
+    ])
+    return "\n".join(lines)
+
+
 async def _llm_map_answer(node: dict[str, Any], message: str, language: str) -> dict[str, Any]:
     settings = get_settings()
     llm = TogetherAIClient(model=settings.patient_controller_model)
@@ -229,11 +333,14 @@ async def _llm_map_answer(node: dict[str, Any], message: str, language: str) -> 
         "You are an answer normalizer for a conversational assessment assistant.\n"
         "Map the user's free-form answer to the current graph node.\n\n"
         "Return only valid JSON with keys:\n"
-        "- ok\n"
+        "- status\n"
         "- value\n"
         "- selected_option\n"
         "- score\n\n"
-        "If the answer cannot be mapped safely, return {\"ok\": false}.\n"
+        "Allowed status values:\n"
+        "- full_match\n"
+        "- no_match\n\n"
+        "If the answer cannot be mapped safely, return status=no_match.\n"
     )
 
     user_prompt = json.dumps(
@@ -260,10 +367,10 @@ async def _llm_map_answer(node: dict[str, Any], message: str, language: str) -> 
         result = None
 
     if not isinstance(result, dict):
-        return {"ok": False, "raw_answer": message}
+        return {"status": "no_match", "raw_answer": message}
 
-    if not result.get("ok"):
-        return {"ok": False, "raw_answer": message}
+    if result.get("status") != "full_match":
+        return {"status": "no_match", "raw_answer": message}
 
     try:
         score = float(result.get("score", 0.0))
@@ -272,7 +379,7 @@ async def _llm_map_answer(node: dict[str, Any], message: str, language: str) -> 
 
     selected_option = result.get("selected_option")
     return {
-        "ok": True,
+        "status": "full_match",
         "raw_answer": message,
         "value": result.get("value"),
         "selected_option": selected_option if isinstance(selected_option, str) else None,
@@ -281,8 +388,7 @@ async def _llm_map_answer(node: dict[str, Any], message: str, language: str) -> 
 
 
 async def _find_graph_candidates(message: str, language: str) -> list[dict[str, Any]]:
-    candidates = search_graphs(message, top_k=5)
-    return candidates
+    return search_graphs(message, top_k=5)
 
 
 @app.post("/chat")
@@ -293,11 +399,29 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
     if not user_message:
         return {"status": "error", "reply_text": "Empty message", "session_state": {}}
 
-    session = load_session(conversation_id)
-    if not isinstance(session, dict):
-        session = _default_session(conversation_id, detect_language(user_message))
+    existing_session = load_session(conversation_id)
+    if not isinstance(existing_session, dict):
+        existing_session = _default_session(conversation_id, detect_language(user_message))
 
     maybe_lang = _detect_language_switch(user_message)
+    base_language = maybe_lang or existing_session.get("language") or detect_language(user_message)
+
+    if user_message == "/start":
+        session = _default_session(conversation_id, base_language)
+        reply_text = _greeting_text(base_language)
+        history = [
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": reply_text},
+        ]
+        session["history"] = history
+        save_session(conversation_id, session)
+        return {
+            "status": session.get("mode", "free_conversation"),
+            "reply_text": reply_text,
+            "session_state": session,
+        }
+
+    session = existing_session
     if maybe_lang:
         session["language"] = maybe_lang
     language = session["language"]
@@ -305,11 +429,26 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
     mode = session.get("mode", "free_conversation")
     reply_text = ""
 
-    if user_message == "/start":
-        reply_text = _greeting_text(language)
+    if _looks_like_capabilities(user_message):
+        reply_text = _capabilities_text(language, in_assessment=(mode == "assessment_in_progress"))
 
-    elif _looks_like_capabilities(user_message):
-        reply_text = _capabilities_text(language)
+    elif _looks_like_cancel(user_message):
+        if mode in {"assessment_in_progress", "paused_assessment"}:
+            session["mode"] = "free_conversation"
+            session["assessment_state"] = None
+            session["selected_graph_id"] = None
+            session["consent_status"] = None
+            reply_text = (
+                "Хорошо, я остановил текущий assessment. Можем вернуться к свободному диалогу и подобрать другой вариант, если нужно."
+                if language == "ru"
+                else "Okay, I stopped the current assessment. We can return to free conversation and choose another option if needed."
+            )
+        else:
+            reply_text = (
+                "Сейчас нет активного assessment для отмены."
+                if language == "ru"
+                else "There is no active assessment to cancel right now."
+            )
 
     elif mode == "awaiting_consent":
         consent = _consent_from_message(user_message)
@@ -328,29 +467,43 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
             session["consent_status"] = "declined"
             session["selected_graph_id"] = None
             reply_text = _decline_text(language)
-        else:
+        elif _looks_like_explain_assessment(user_message):
             graph_id = session.get("selected_graph_id")
             record = get_graph_record(graph_id) if isinstance(graph_id, str) else None
-            if record:
-                reply_text = _offer_text(
-                    {
-                        "graph_id": record.get("graph_id"),
-                        "metadata": record.get("metadata", {}),
-                    },
-                    language,
-                )
+            if isinstance(record, dict):
+                candidate = {"graph_id": record.get("graph_id"), "metadata": record.get("metadata", {})}
+                reply_text = _offer_text(candidate, language)
             else:
                 session["mode"] = "free_conversation"
                 reply_text = _no_match_text(language)
+        else:
+            candidates = await _find_graph_candidates(user_message, language)
+            if candidates and float(candidates[0].get("score", 0.0)) >= 3.0:
+                top = candidates[0]
+                session["selected_graph_id"] = top.get("graph_id")
+                session["discovered_graphs"] = [c.get("graph_id") for c in candidates if c.get("graph_id")]
+                session["consent_status"] = "pending"
+                reply_text = _offer_text(top, language)
+            else:
+                graph_id = session.get("selected_graph_id")
+                record = get_graph_record(graph_id) if isinstance(graph_id, str) else None
+                if isinstance(record, dict):
+                    reply_text = _offer_text({"graph_id": record.get("graph_id"), "metadata": record.get("metadata", {})}, language)
+                else:
+                    reply_text = _no_match_text(language)
 
     elif mode == "assessment_in_progress":
         graph_id = session.get("selected_graph_id")
         record = get_graph_record(graph_id) if isinstance(graph_id, str) else None
         runtime_graph = extract_runtime_graph(record)
+
         assessment_state = session.get("assessment_state")
         if not isinstance(assessment_state, dict):
             assessment_state = create_assessment_state(runtime_graph, language)
             session["assessment_state"] = assessment_state
+
+        assessment_state["language"] = language
+        session["assessment_state"] = assessment_state
 
         if _looks_like_pause(user_message):
             session["mode"] = "paused_assessment"
@@ -360,18 +513,13 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
                 else "Okay, we can pause the assessment here. When you want to continue, just send me a message."
             )
         elif maybe_lang:
-            assessment_state["language"] = language
-            session["assessment_state"] = assessment_state
-            ack = "Хорошо, продолжим по-русски.\n\n" if language == "ru" else "Okay, we will continue in English.\n\n"
-            reply_text = ack + repeat_current_question(runtime_graph, assessment_state)
+            reply_text = ("Хорошо, продолжим по-русски.\n\n" if language == "ru" else "Okay, we will continue in English.\n\n") + repeat_current_question(runtime_graph, assessment_state)
         elif _is_greeting(user_message):
             reply_text = (
-                "Привет. Мы сейчас находимся внутри assessment. Если хотите, можем продолжить с текущего вопроса.\n\n"
-                + repeat_current_question(runtime_graph, assessment_state)
+                "Привет. Мы сейчас внутри assessment. Если хотите, можем продолжить с текущего вопроса.\n\n"
                 if language == "ru"
                 else "Hi. We are currently inside the assessment. If you want, we can continue from the current question.\n\n"
-                + repeat_current_question(runtime_graph, assessment_state)
-            )
+            ) + repeat_current_question(runtime_graph, assessment_state)
         elif _looks_like_why_question(user_message):
             reply_text = explain_current_question(runtime_graph, assessment_state) + "\n\n" + repeat_current_question(runtime_graph, assessment_state)
         elif _looks_like_help(user_message):
@@ -380,17 +528,22 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
             reply_text = repeat_current_question(runtime_graph, assessment_state)
         elif _looks_like_result_request(user_message):
             reply_text = _result_text(assessment_state.get("result"), language)
-        elif _looks_like_capabilities(user_message):
-            reply_text = (
-                "Сейчас мы проходим один assessment. Я могу продолжить его, поставить на паузу или позже помочь подобрать другой graph."
-                if language == "ru"
-                else "We are currently going through one assessment. I can continue it, pause it, or later help choose another graph."
-            )
+        elif _looks_like_detailed_report(user_message):
+            reply_text = _detailed_report_text(assessment_state.get("result"), language)
+        elif _looks_like_explain_last_result(user_message):
+            if assessment_state.get("result"):
+                reply_text = explain_last_result(assessment_state.get("result"), language)
+            else:
+                reply_text = (
+                    "Сначала нужно завершить assessment, и тогда я смогу объяснить результат."
+                    if language == "ru"
+                    else "The assessment needs to be completed first, and then I can explain the result."
+                )
         else:
             node = get_current_node(runtime_graph, assessment_state)
-            deterministic = infer_answer_deterministically(node or {}, user_message, language)
+            deterministic = infer_answer_deterministically(node or {}, user_message, language, assessment_state)
             normalized = deterministic
-            if not deterministic.get("ok") and isinstance(node, dict):
+            if deterministic.get("status") == "no_match" and isinstance(node, dict):
                 normalized = await _llm_map_answer(node, user_message, language)
             result = answer_current_question(runtime_graph, assessment_state, normalized)
             session["assessment_state"] = result["assessment_state"]
@@ -418,12 +571,45 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
                 else "The assessment is currently paused. When you want to continue, just tell me."
             )
 
-    else:
-        if _looks_like_result_request(user_message):
+    elif mode == "post_assessment":
+        if _looks_like_detailed_report(user_message):
+            reply_text = _detailed_report_text(session.get("last_result"), language)
+        elif _looks_like_explain_last_result(user_message):
+            reply_text = explain_last_result(session.get("last_result"), language)
+        elif _looks_like_result_request(user_message):
             reply_text = _result_text(session.get("last_result"), language)
-        elif _looks_like_explain_assessment(user_message):
+        elif _looks_like_acknowledgement(user_message):
+            session["mode"] = "free_conversation"
             reply_text = (
-                "Я могу помочь подобрать assessment из библиотеки графов, предложить наиболее подходящий вариант и провести вас по нему шаг за шагом."
+                "Хорошо. Если хотите, можете описать новый запрос, и я попробую подобрать другой assessment."
+                if language == "ru"
+                else "Okay. If you want, describe a new concern and I will try to find another assessment."
+            )
+        elif _is_greeting(user_message):
+            session["mode"] = "free_conversation"
+            reply_text = _greeting_text(language)
+        else:
+            candidates = await _find_graph_candidates(user_message, language)
+            if candidates and float(candidates[0].get("score", 0.0)) >= 3.0:
+                top = candidates[0]
+                session["mode"] = "awaiting_consent"
+                session["selected_graph_id"] = top.get("graph_id")
+                session["discovered_graphs"] = [c.get("graph_id") for c in candidates if c.get("graph_id")]
+                session["consent_status"] = "pending"
+                reply_text = _offer_text(top, language)
+            else:
+                # Keep the session in post_assessment instead of dropping immediately to no-match.
+                # This allows result-focused follow-ups to continue working.
+                reply_text = (
+                    "Я могу объяснить последний результат, дать краткий или подробный отчёт, либо помочь подобрать новый assessment по новому запросу."
+                    if language == "ru"
+                    else "I can explain the last result, give a short or detailed report, or help choose a new assessment for a new concern."
+                )
+
+    else:
+        if _looks_like_explain_assessment(user_message):
+            reply_text = (
+                "Я могу помочь подобрать assessment из библиотеки graph-ов, предложить наиболее подходящий вариант и провести вас по нему шаг за шагом."
                 if language == "ru"
                 else "I can help select an assessment from the graph library, suggest the most relevant option, and guide you through it step by step."
             )
@@ -431,16 +617,13 @@ async def chat(payload: dict[str, Any]) -> dict[str, Any]:
             reply_text = _greeting_text(language)
         else:
             candidates = await _find_graph_candidates(user_message, language)
-            if candidates:
+            if candidates and float(candidates[0].get("score", 0.0)) >= 3.0:
                 top = candidates[0]
-                if float(top.get("score", 0.0)) >= 3.0:
-                    session["mode"] = "awaiting_consent"
-                    session["selected_graph_id"] = top.get("graph_id")
-                    session["discovered_graphs"] = [c.get("graph_id") for c in candidates if c.get("graph_id")]
-                    session["consent_status"] = "pending"
-                    reply_text = _offer_text(top, language)
-                else:
-                    reply_text = _no_match_text(language)
+                session["mode"] = "awaiting_consent"
+                session["selected_graph_id"] = top.get("graph_id")
+                session["discovered_graphs"] = [c.get("graph_id") for c in candidates if c.get("graph_id")]
+                session["consent_status"] = "pending"
+                reply_text = _offer_text(top, language)
             else:
                 reply_text = _no_match_text(language)
 
