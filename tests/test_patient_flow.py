@@ -5,12 +5,15 @@ import sys
 import unittest
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from hea.graphs.patient.nodes import (  # noqa: E402
     red_flag_guidance,
+    reset_to_free,
     restate_consent,
     route_user_message,
     search_assessments,
@@ -19,7 +22,7 @@ from hea.graphs.patient.nodes import (  # noqa: E402
     show_post_options,
 )
 from hea.graphs.patient.graph import build_patient_graph  # noqa: E402
-from hea.services.patient_controller.app import report as patient_report, report_pdf as patient_report_pdf  # noqa: E402
+from hea.services.patient_controller.app import app as patient_app, report as patient_report, report_pdf as patient_report_pdf  # noqa: E402
 from hea.shared.db import init_db  # noqa: E402
 from hea.shared.patient_pipeline import extract_patient_intake  # noqa: E402
 from hea.shared.registry import upsert_graph  # noqa: E402
@@ -122,6 +125,34 @@ class PatientFlowTests(unittest.TestCase):
     def test_post_assessment_new_request_resets_to_free(self) -> None:
         routed = asyncio.run(route_user_message({"language": "ru", "user_message": "давай новый запрос", "mode": "post_assessment"}))
         self.assertEqual(routed["next_action"], "RESET_TO_FREE")
+
+    def test_reset_to_free_clears_previous_assessment_context(self) -> None:
+        reset = asyncio.run(
+            reset_to_free(
+                {
+                    "language": "ru",
+                    "mode": "post_assessment",
+                    "selected_graph_id": "stress_graph",
+                    "selected_graph": {"title": "Stress"},
+                    "discovered_graphs": ["stress_graph"],
+                    "consent_status": "accepted",
+                    "assessment_state": {"status": "completed"},
+                    "last_result": {"graph_title": "Stress"},
+                    "candidates": [{"graph_id": "stress_graph"}],
+                    "red_flag_status": "none",
+                    "symptom_summary": "стресс",
+                    "last_search_query": "стресс",
+                    "symptom_intake": {"symptoms": ["stress"]},
+                }
+            )
+        )
+        self.assertEqual(reset["mode"], "free_conversation")
+        self.assertIsNone(reset["selected_graph_id"])
+        self.assertIsNone(reset["selected_graph"])
+        self.assertIsNone(reset["last_result"])
+        self.assertIsNone(reset["assessment_state"])
+        self.assertIsNone(reset["symptom_intake"])
+        self.assertEqual(reset["candidates"], [])
 
     def test_post_assessment_pdf_request_routes_to_last_report(self) -> None:
         routed = asyncio.run(route_user_message({"language": "ru", "user_message": "пдф?", "mode": "post_assessment"}))
@@ -309,6 +340,24 @@ class PatientFlowTests(unittest.TestCase):
         response = asyncio.run(patient_report_pdf("report_pdf_demo"))
         self.assertIn("application/pdf", response.media_type)
         self.assertTrue(response.body.startswith(b"%PDF-1.4"))
+
+    def test_patient_report_pdf_route_is_not_shadowed_by_html_route(self) -> None:
+        save_patient_session(
+            "report_pdf_route_demo",
+            {
+                "language": "en",
+                "last_result": {
+                    "graph_title": "Burnout",
+                    "score_total": 3,
+                    "risk_band": {"label": "Moderate burnout risk", "meaning": "Some signs are present."},
+                },
+                "selected_graph": {"topic": "stress", "report_rules": ["burnout", "summarize exhaustion"]},
+            },
+        )
+        client = TestClient(patient_app)
+        response = client.get("/report/report_pdf_route_demo.pdf")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/pdf", response.headers.get("content-type", ""))
 
     def test_show_last_report_includes_report_links(self) -> None:
         result = asyncio.run(

@@ -90,19 +90,6 @@ async def chat(payload: ChatRequest) -> PatientChatResponse:
     )
 
 
-@app.get("/report/{conversation_id}", response_class=HTMLResponse)
-async def report(conversation_id: str) -> HTMLResponse:
-    state = load_patient_session(conversation_id) or {}
-    language = str(state.get("language") or "en")
-    assessment_state = state.get("assessment_state") or {}
-    result = assessment_state.get("result") or state.get("last_result")
-    if isinstance(result, dict):
-        result = dict(result)
-        result["_graph"] = state.get("selected_graph") or {}
-        result["_answers"] = (assessment_state.get("answers") if isinstance(assessment_state, dict) else None) or []
-    return HTMLResponse(render_report_html(result, language))
-
-
 @app.get("/report/{conversation_id}.pdf")
 async def report_pdf(conversation_id: str) -> Response:
     state = load_patient_session(conversation_id) or {}
@@ -118,3 +105,16 @@ async def report_pdf(conversation_id: str) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename=\"{conversation_id}.pdf\"'},
     )
+
+
+@app.get("/report/{conversation_id}", response_class=HTMLResponse)
+async def report(conversation_id: str) -> HTMLResponse:
+    state = load_patient_session(conversation_id) or {}
+    language = str(state.get("language") or "en")
+    assessment_state = state.get("assessment_state") or {}
+    result = assessment_state.get("result") or state.get("last_result")
+    if isinstance(result, dict):
+        result = dict(result)
+        result["_graph"] = state.get("selected_graph") or {}
+        result["_answers"] = (assessment_state.get("answers") if isinstance(assessment_state, dict) else None) or []
+    return HTMLResponse(render_report_html(result, language))

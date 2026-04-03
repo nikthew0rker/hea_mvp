@@ -209,6 +209,17 @@ async def reset_to_free(state: dict) -> dict:
     language = str(state.get("language") or "ru")
     return {
         "mode": "free_conversation",
+        "selected_graph_id": None,
+        "selected_graph": None,
+        "discovered_graphs": [],
+        "consent_status": None,
+        "assessment_state": None,
+        "last_result": None,
+        "candidates": [],
+        "red_flag_status": None,
+        "symptom_summary": None,
+        "last_search_query": None,
+        "symptom_intake": None,
         "assistant_reply": (
             "Хорошо. Если хотите, можете описать новый запрос, и я попробую подобрать другой опросник."
             if language == "ru"

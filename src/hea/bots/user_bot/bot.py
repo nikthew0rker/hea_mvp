@@ -49,8 +49,10 @@ async def text_handler(message: Message) -> None:
         try:
             pdf_bytes, content_type = await get_bytes(f"{settings.patient_controller_host}/report/{conversation_id}.pdf")
         except httpx.HTTPError:
+            await message.answer("Не удалось загрузить PDF-отчёт. Попробуйте еще раз через несколько секунд.")
             return
         if "application/pdf" not in content_type.lower():
+            await message.answer("PDF-отчёт сейчас недоступен в правильном формате. Попробуйте еще раз.")
             return
         await message.answer_document(
             BufferedInputFile(pdf_bytes, filename=f"{conversation_id}.pdf"),
