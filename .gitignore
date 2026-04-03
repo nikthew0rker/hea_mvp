@@ -1,0 +1,32 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtualenv / uv
+.venv/
+
+# Local env
+.env
+
+# Local databases and runtime data
+*.sqlite
+data/
+!data/.gitkeep
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Project backup snapshots
+backup/
+.backup_langgraph_*/

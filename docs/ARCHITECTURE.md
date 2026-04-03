@@ -1,253 +1,503 @@
-# ARCHITECTURE.md
+# Architecture
 
-## 1. Overview
+## Purpose
 
-Hea MVP is a **prompt-driven assessment platform** with two distinct but connected interaction domains:
+Hea is designed as a clinical authoring-and-delivery system with two separate but connected agent surfaces:
 
-1. **Specialist-side authoring**
-2. **Patient-side orchestration and runtime**
+- `Specialist surface` for authoring clinical artifacts
+- `Patient surface` for discovery, intake, runtime execution, and result explanation
 
-The system is designed to support **graph-agnostic assessment authoring and execution**.
+The specialist surface intentionally supports both:
 
-That means the platform should not be limited to:
-- diabetes
-- sleep
-- stress
-- cardiometabolic risk
-- one fixed questionnaire
+- `prompt execution` -> a specialist can submit a full scenario prompt
+- `prompt construction assistance` -> the bot can help the specialist create that prompt interactively in chat
 
-Instead, it should support **any published assessment graph** that conforms to the runtime contract.
+The system is intentionally split so that:
 
----
+- specialists define the logic
+- patients consume only published artifacts
+- draft authoring is isolated from patient delivery
 
-## 2. Main architectural principle
+## Architectural Methodology
 
-The system separates:
+The project follows five core principles.
 
-- **authoring**
-- **compilation**
-- **publication**
-- **discovery**
-- **execution**
-- **result presentation**
+### 1. Typed intermediate representation first
 
-This separation is essential because the specialist and the patient solve different problems.
+The system does not treat clinical artifacts as plain chat text.
 
-### Specialist problem
-“How do I define a safe, structured, executable assessment?”
+Instead, specialist input is compiled into typed IR using `Pydantic` models:
 
-### Patient problem
-“How do I naturally talk to the assistant and, when appropriate, get matched to the right assessment?”
+- `QuestionnaireSpec`
+- `QuestionSpec`
+- `QuestionOptionSpec`
+- `RiskBandSpec`
+- `AnamnesisSectionSpec`
+- `ClinicalRuleNodeSpec`
+- `EditOperation`
+- `CriticReview`
+- `PendingProposal`
+- `PatientSymptomIntake`
+- `PatientIntentDecision`
 
----
+This is the main architectural protection against brittle prompt-only behavior.
 
-## 3. Top-level architecture
+### 2. Orchestration and business logic are separated
+
+`LangGraph` is used for routing and state transitions.
+
+Business logic stays outside the graph:
+
+- parsing
+- compilation
+- validation
+- search
+- storage
+- runtime scoring
+
+This makes the system easier to test and evolve.
+
+### 3. Human approval before publication
+
+Specialist-side authoring is not a direct “LLM writes production graph” path.
+
+The intended flow is:
+
+`message -> analysis -> edit operation -> compile spec -> validate/review -> proposal -> apply -> compile graph -> publish`
+
+This protects the patient-facing registry from half-formed drafts.
+
+This also means the specialist assistant is not just a prompt runner.
+It is a prompt-building copilot:
+
+- it can take a complete scenario prompt
+- or help the specialist discover and refine the scenario in several turns
+- then convert that conversation into a typed artifact proposal
+
+### 4. Shared registry, isolated draft space
+
+There are two different persistence concerns:
+
+- draft/session/version state for specialist and patient workflows
+- published graph registry used for patient search
+
+This distinction is critical.
+
+A draft can exist and still be invisible to patients.
+
+Only `publish` makes an artifact searchable by the patient bot.
+
+### 5. Safety by layered constraints
+
+The system does not rely on one model or one prompt for safety.
+
+It uses layers:
+
+- typed schemas
+- rule-based validation
+- critic pass
+- publish gate
+- patient triage / red-flag routing
+- restricted product boundary
+
+## Libraries and Their Roles
+
+### FastAPI
+
+Used for:
+
+- `specialist_controller`
+- `patient_controller`
+
+Role:
+
+- stable HTTP boundary around the LangGraph workflows
+- controller lifecycle, startup, and dependency wiring
+
+### LangGraph
+
+Used for:
+
+- specialist authoring graph
+- patient orchestration graph
+- patient runtime subgraph
+
+Role:
+
+- stateful graph execution
+- conditional routing
+- explicit state transitions
+- subgraph composition
+
+Why LangGraph fits here:
+
+- the system is workflow-heavy, not single-shot
+- different states need different policies
+- patient runtime is naturally a subgraph
+- specialist authoring requires interrupt/apply/review style transitions
+
+What LangGraph is not doing here:
+
+- it is not parsing questionnaires
+- it is not validating clinical correctness
+- it is not the storage layer
+
+Those concerns live in `src/hea/shared/*`.
+
+### Pydantic
+
+Used for:
+
+- all typed IR and structured contracts
+- request DTOs
+- validation of model outputs
+
+Role:
+
+- the schema backbone of the system
+
+### aiogram
+
+Used for:
+
+- Telegram bot adapters
+
+Role:
+
+- transport only
+- bot layer remains thin and forwards messages to controllers
+
+### httpx
+
+Used for:
+
+- Together API requests
+- controller HTTP calls from bot adapters
+
+### sqlite3
+
+Used for:
+
+- published graph registry
+- specialist drafts and draft history
+- audit events
+- specialist sessions
+- patient sessions
+
+### Together AI
+
+Used for:
+
+- structured model calls for controller/analyst/compiler/critic roles
+
+The system does not use one universal model for everything.
+
+### Guardrails AI
+
+Current status:
+
+- not installed
+- not yet used in runtime
+
+Architectural position:
+
+- valid future addition on top of the current stack
+- best suited as an extra validation/re-ask layer after model output, not as the replacement for the current architecture
+
+If added later, Guardrails should sit between:
+
+`model output -> schema/domain validation -> accept / re-ask`
+
+## System Layers
+
+## 1. Specialist Layer
+
+Main graph:
+
+- [`graph.py`](/Users/nik/PycharmProjects/PythonProject/hea_mvp/src/hea/graphs/specialist/graph.py)
+
+Main responsibilities:
+
+- understand specialist intent
+- prepare proposals
+- apply proposals into draft state
+- compile draft into graph
+- publish graph to registry
+
+Specialist interaction modes:
+
+- `direct prompt mode`: one large scenario prompt
+- `copilot mode`: iterative dialog that helps the specialist formulate the scenario prompt itself
+
+Specialist architecture:
 
 ```text
-                         ┌──────────────────────────────┐
-                         │       Specialist Bot         │
-                         │   controller-based authoring │
-                         └──────────────┬───────────────┘
-                                        │
-                                        ▼
-                         ┌──────────────────────────────┐
-                         │      Definition Agent        │
-                         │  extract / merge / edit draft│
-                         └──────────────┬───────────────┘
-                                        │
-                                        ▼
-                         ┌──────────────────────────────┐
-                         │       Compiler Agent         │
-                         │ draft -> runtime-ready graph │
-                         └──────────────┬───────────────┘
-                                        │
-                                        ▼
-                         ┌──────────────────────────────┐
-                         │ Publish Handoff + Registry   │
-                         │ active graph + graph library │
-                         └──────────────┬───────────────┘
-                                        │
-      ┌─────────────────────────────────┴─────────────────────────────────┐
-      │                                                                   │
-      ▼                                                                   ▼
-┌───────────────┐                                            ┌──────────────────────┐
-│ Active Graph  │                                            │  Graph Registry      │
-│ current active│                                            │ searchable collection│
-└───────────────┘                                            └──────────────────────┘
-                                                                      │
-                                                                      ▼
-                                                         ┌──────────────────────────┐
-                                                         │   Patient Controller /   │
-                                                         │   Patient Orchestrator   │
-                                                         └────────────┬─────────────┘
-                                                                      │
-                                                                      ▼
-                                                         ┌──────────────────────────┐
-                                                         │ Graph Search + Selector  │
-                                                         └────────────┬─────────────┘
-                                                                      │
-                                                                      ▼
-                                                         ┌──────────────────────────┐
-                                                         │ Consent + Graph Runtime  │
-                                                         └────────────┬─────────────┘
-                                                                      │
-                                                                      ▼
-                                                         ┌──────────────────────────┐
-                                                         │ Result Interpreter /     │
-                                                         │ Response Renderer         │
-                                                         └──────────────────────────┘
+Specialist message
+  -> route_specialist_message
+  -> discuss / update / show / apply / compile / publish
+  -> authoring pipeline
+  -> draft store / version store / audit store
 ```
 
----
+Important specialist concept:
 
-## 4. Specialist-side architecture
+- the graph does not directly store free-form text as production logic
+- it first generates a `PendingProposal`
+- that proposal is reviewed before apply
 
-The specialist side is built around a **draft-first authoring model**.
+### Specialist authoring pipeline
 
-### Main objects
-- draft
-- compiled graph
-- published graph
+Key module:
 
-### Main stages
-1. source intake
-2. structured extraction
-3. draft inspection
-4. draft editing
-5. compilation
-6. publication
+- [`authoring_pipeline.py`](/Users/nik/PycharmProjects/PythonProject/hea_mvp/src/hea/shared/authoring_pipeline.py)
 
-The specialist bot acts as a **controller-based copilot**, not a rigid form.
+Responsibilities:
 
----
+- plan `EditOperation`
+- compile specialist input into typed spec
+- preserve scored options and question structure
+- build anamnesis sections
+- build clinical rule nodes
+- run local validation
+- merge critic review
+- produce diff/proposal summaries
 
-## 5. Patient-side architecture
+### Specialist persistence
 
-The patient side is built around **orchestration over a graph library**.
+Stored data:
 
-### It does not assume:
-- that one graph is always the right one
-- that the user wants to start assessment immediately
-- that the conversation starts inside a questionnaire
+- current draft
+- draft versions
+- audit events
+- graph publication result
 
-### It does assume:
-- the patient begins in free conversation mode
-- the system should discover the right graph
-- consent should be collected before runtime starts
-- after completion, the assistant should return to free conversation mode
+This gives the system:
 
----
+- rollback
+- version inspection
+- safer iterative authoring
 
-## 6. Canonical product loop
+## 2. Patient Layer
 
-The full product loop is:
+Main graph:
 
-### Specialist loop
-source material -> draft -> compile -> publish
+- [`graph.py`](/Users/nik/PycharmProjects/PythonProject/hea_mvp/src/hea/graphs/patient/graph.py)
 
-### Patient loop
-free conversation -> graph discovery -> offer -> consent -> runtime -> result -> free conversation
+Main responsibilities:
 
-This is the most important conceptual model in the system.
+- understand patient request
+- perform symptom intake
+- detect red flags
+- search published graphs
+- disambiguate between candidates
+- ask consent
+- hand off to runtime graph
+- explain result
 
----
+Patient architecture:
 
-## 7. Core artifacts
+```text
+Patient message
+  -> route_user_message
+  -> patient analyst decision
+  -> triage / search / selection / consent / runtime / result
+```
 
-### 7.1 Draft
-Mutable specialist-side object.
+### Patient intake methodology
 
-Contains:
-- topic
-- target audience
-- candidate questions
-- scoring rules
+The patient side does not rely only on the last utterance.
+
+It accumulates a typed `PatientSymptomIntake`:
+
+- summary
+- symptoms
+- suspected topics
+- duration
+- severity
+- free_text
+
+This is later used by search and recommendation logic.
+
+### Patient safety methodology
+
+Patient routing includes:
+
+- red-flag detection
+- non-emergency vs emergency guidance
+- explicit consent before assessment
+- preservation of context in paused and post-assessment states
+
+## 3. Patient Runtime Layer
+
+Runtime subgraph:
+
+- [`graph.py`](/Users/nik/PycharmProjects/PythonProject/hea_mvp/src/hea/graphs/patient_runtime/graph.py)
+
+Role:
+
+- run the selected artifact
+- ask the next question
+- accept answers
+- repeat/help/explain
+- finish with result/report
+
+The runtime layer is artifact-aware:
+
+- questionnaire scoring
+- questionnaire branching through option-level `next_question_id`
+- rule-graph synthetic diagnostic inputs
+- rule matching via `conditions_ast`
+- HTML report rendering through the patient controller report endpoint
+
+## Artifact Model
+
+The system supports three artifact families.
+
+### Questionnaire
+
+Use case:
+
+- scored screening scales like FINDRISC
+
+Core structure:
+
+- questions
+- options
+- optional answer-driven branching via `next_question_id`
+- scores
+- scoring method
 - risk bands
-- report requirements
-- safety requirements
-- missing fields
 
-### 7.2 Compiled graph
-Executable assessment artifact.
+### Anamnesis Flow
 
-Contains:
-- unique graph id
-- title/topic
-- questions or nodes
-- scoring structure
-- risk band mapping
-- source draft linkage
+Use case:
 
-### 7.3 Active graph
-The currently active graph for direct runtime use.
+- structured history-taking flows
 
-### 7.4 Graph registry entry
-Searchable library entry used by patient orchestration.
+Core structure:
 
-Contains:
-- graph id
+- sections
+- section goals
+- section questions
+- branching cues
+
+### Clinical Rule Graph
+
+Use case:
+
+- early triage / diagnostic support logic
+
+Core structure:
+
+- diagnostic inputs
+- rule nodes
+- condition AST
+- outcomes
+
+## Publication Model
+
+There are three different states that must not be confused.
+
+### Draft
+
+Exists only in specialist draft storage.
+
+Visible to patient:
+
+- no
+
+### Compiled graph
+
+A graph candidate produced from a draft.
+
+Visible to patient:
+
+- no
+
+### Published graph
+
+Written into the shared `graphs` registry.
+
+Visible to patient:
+
+- yes
+
+This is one of the most important operational rules in the system.
+
+## Search Architecture
+
+Current patient search is `intake-aware metadata matching`.
+
+Inputs:
+
+- raw user query
+- intake summary
+- suspected topics
+- symptoms
+- severity
+
+Graph-side signals:
+
 - title
+- topic
 - description
 - tags
-- entry signals
-- search text
-- runtime payload
+- entry_signals
+- artifact_type
 
----
+This is stronger than plain token overlap, but still not a final semantic retrieval system.
 
-## 8. Why there are both active graph and graph registry
+## Validation Architecture
 
-The system currently supports two related but different concepts:
+Current validation stack:
 
-### Active graph
-Used when the system needs one currently active graph.
+1. `Pydantic` schema validation
+2. project-specific local validation
+3. critic model pass
+4. publish gate
 
-### Graph registry
-Used when the patient assistant needs to search across multiple published graphs.
+Examples of what is checked:
 
-In the final patient-side design, **graph registry is the more important abstraction**.
+- missing questions
+- missing risk bands for scored questionnaires
+- malformed single-choice questions
+- missing anamnesis sections
+- missing rule nodes
+- editor commands leaking into description
+- unsafe diagnosis/treatment language
 
----
+## Why This Architecture Is Better Than a Single Chat Agent
 
-## 9. Runtime boundaries
+Without this architecture, one model would have to do all of the following in one step:
 
-### The system may:
-- explain assessments
-- guide users through them
-- compute graph-defined results
-- present graph-defined categories and summaries
+- understand intent
+- edit structure
+- preserve scores
+- validate clinical logic
+- decide publication safety
 
-### The system must not:
-- diagnose disease
-- prescribe treatment
-- recommend medication
-- act as a full medical advisor
+That is fragile.
 
-This boundary exists on both specialist and patient side.
+The current system reduces that fragility by splitting concerns into explicit stages with typed contracts.
 
----
+## Known Limits
 
-## 10. Why this architecture fits MVP
+The system is much stronger than the initial MVP, but it still has limits.
 
-This architecture is suitable for MVP because it:
+Current limits include:
 
-- demonstrates platform thinking
-- supports multiple future graph domains
-- avoids hardcoding one questionnaire
-- keeps deterministic graph execution separate from conversational reasoning
-- remains lightweight enough for fast iteration
+- no real Guardrails integration yet
+- no vector retrieval or full semantic search
+- partial condition AST only
+- no specialist UI beyond chat and controller responses
+- limited domain validators compared with a production clinical platform
 
----
+## Recommended Next Steps
 
-## 11. Deliberate MVP limitations
+Highest-value next steps:
 
-Known simplifications:
-- file-based storage
-- simple graph registry search
-- minimal session store
-- no web UI
-- no persistent DB-backed transaction layer
-- no enterprise-grade approval flow
-
-These are acceptable at MVP stage.
-
+1. add richer clinical validators
+2. extend rule AST with nested `and/or`
+3. improve graph metadata and retrieval semantics
+4. add selective diff approval UI
+5. optionally add Guardrails as a post-generation validation layer

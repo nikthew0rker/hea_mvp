@@ -1,0 +1,341 @@
+{
+  "strategies": [
+    {
+      "strategy_id": "diabetes/findrisk",
+      "topic": "diabetes",
+      "framework": "findrisk",
+      "question_source_summary": "starter FINDRISC-like scaffold",
+      "scaffold": {
+        "understood": {
+          "topic": "diabetes",
+          "framework": "findrisk",
+          "tags": ["diabetes", "findrisk", "glucose", "metabolic"],
+          "entry_signals": ["diabetes", "findrisk", "сухость во рту", "жажда", "глюкоза", "диабет"],
+          "source_summary": "starter FINDRISC-like scaffold generated from scaffold registry catalog"
+        },
+        "candidate_questions": [
+          {
+            "id": "q1",
+            "text": "Возраст",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "<45", "value": "lt45", "score": 0},
+              {"label": "45-54", "value": "45_54", "score": 2},
+              {"label": "55-64", "value": "55_64", "score": 3},
+              {"label": ">64", "value": "gt64", "score": 4}
+            ]
+          },
+          {
+            "id": "q2",
+            "text": "Индекс массы тела (ИМТ)",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "<25", "value": "lt25", "score": 0},
+              {"label": "25-30", "value": "25_30", "score": 1},
+              {"label": ">30", "value": "gt30", "score": 3}
+            ]
+          },
+          {
+            "id": "q3",
+            "text": "Окружность талии",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "Ниже порога", "value": "waist_low", "score": 0},
+              {"label": "Немного выше порога", "value": "waist_mid", "score": 3},
+              {"label": "Сильно выше порога", "value": "waist_high", "score": 4}
+            ]
+          },
+          {
+            "id": "q4",
+            "text": "Есть ли у вас ежедневная физическая активность не менее 30 минут?",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "Да", "value": "yes", "score": 0},
+              {"label": "Нет", "value": "no", "score": 2}
+            ]
+          },
+          {
+            "id": "q5",
+            "text": "Едите ли вы овощи, фрукты или ягоды каждый день?",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "Да", "value": "yes", "score": 0},
+              {"label": "Нет", "value": "no", "score": 1}
+            ]
+          },
+          {
+            "id": "q6",
+            "text": "Принимаете ли вы препараты от повышенного давления?",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "Нет", "value": "no", "score": 0},
+              {"label": "Да", "value": "yes", "score": 2}
+            ]
+          },
+          {
+            "id": "q7",
+            "text": "Был ли у вас раньше повышенный уровень глюкозы в крови?",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "Нет", "value": "no", "score": 0},
+              {"label": "Да", "value": "yes", "score": 5}
+            ]
+          },
+          {
+            "id": "q8",
+            "text": "Есть ли у вас родственники первой линии с диабетом?",
+            "question_type": "single_choice",
+            "source": "starter FINDRISC-like scaffold",
+            "options": [
+              {"label": "Нет", "value": "no", "score": 0},
+              {"label": "Да", "value": "yes", "score": 5}
+            ]
+          }
+        ],
+        "candidate_scoring_rules": {
+          "method": "sum_of_option_scores"
+        },
+        "candidate_risk_bands": [
+          {"min_score": 0, "max_score": 6, "label": "Low risk", "meaning": "Low estimated risk in this screening graph."},
+          {"min_score": 7, "max_score": 14, "label": "Elevated risk", "meaning": "Elevated estimated risk in this screening graph."},
+          {"min_score": 15, "max_score": 20, "label": "High risk", "meaning": "High estimated risk in this screening graph."},
+          {"min_score": 21, "max_score": 1000, "label": "Very high risk", "meaning": "Very high estimated risk in this screening graph."}
+        ],
+        "candidate_report_requirements": [
+          "Show total score and risk category.",
+          "Explain that this is a screening result and only blood testing can confirm diabetes or prediabetes.",
+          "For elevated or higher risk, recommend planned clinician follow-up and formal testing such as blood glucose or A1C.",
+          "Include practical prevention-oriented next steps: physical activity, nutrition, and weight management.",
+          "Use non-diagnostic wording."
+        ],
+        "candidate_safety_requirements": [],
+        "missing_fields": []
+      }
+    },
+    {
+      "strategy_id": "diabetes/default",
+      "topic": "diabetes",
+      "question_source_summary": "starter diabetes scaffold",
+      "scaffold": {
+        "understood": {
+          "topic": "diabetes",
+          "tags": ["diabetes", "glucose", "metabolic"],
+          "entry_signals": ["diabetes", "сухость во рту", "жажда", "глюкоза", "диабет"],
+          "source_summary": "starter diabetes scaffold generated from scaffold registry catalog"
+        },
+        "candidate_questions": [
+          {
+            "id": "q1",
+            "text": "Возраст",
+            "question_type": "single_choice",
+            "source": "starter diabetes scaffold",
+            "options": [
+              {"label": "<45", "value": "lt45", "score": 0},
+              {"label": "45-54", "value": "45_54", "score": 2},
+              {"label": "55-64", "value": "55_64", "score": 3},
+              {"label": ">64", "value": "gt64", "score": 4}
+            ]
+          },
+          {
+            "id": "q2",
+            "text": "Индекс массы тела (ИМТ)",
+            "question_type": "single_choice",
+            "source": "starter diabetes scaffold",
+            "options": [
+              {"label": "<25", "value": "lt25", "score": 0},
+              {"label": "25-30", "value": "25_30", "score": 1},
+              {"label": ">30", "value": "gt30", "score": 3}
+            ]
+          }
+        ],
+        "candidate_scoring_rules": {
+          "method": "sum_of_option_scores"
+        },
+        "candidate_risk_bands": [
+          {"min_score": 0, "max_score": 6, "label": "Low risk", "meaning": "Low estimated risk in this screening graph."},
+          {"min_score": 7, "max_score": 11, "label": "Elevated risk", "meaning": "Elevated estimated risk in this screening graph."},
+          {"min_score": 12, "max_score": 1000, "label": "High risk", "meaning": "High estimated risk in this screening graph."}
+        ],
+        "candidate_report_requirements": [
+          "Show total score and risk category.",
+          "Explain that this is a screening result and only blood testing can confirm diabetes or prediabetes.",
+          "For elevated or higher risk, recommend planned clinician follow-up and formal testing such as blood glucose or A1C.",
+          "Include practical prevention-oriented next steps: physical activity, nutrition, and weight management.",
+          "Use non-diagnostic wording."
+        ],
+        "candidate_safety_requirements": [],
+        "missing_fields": []
+      }
+    },
+    {
+      "strategy_id": "sleep/default",
+      "topic": "sleep",
+      "question_source_summary": "starter sleep scaffold",
+      "scaffold": {
+        "understood": {
+          "topic": "sleep",
+          "tags": ["sleep", "fatigue", "insomnia"],
+          "entry_signals": ["sleep", "сон", "инсомния", "усталость"],
+          "source_summary": "starter sleep scaffold generated from scaffold registry catalog"
+        },
+        "candidate_questions": [
+          {
+            "id": "q1",
+            "text": "Как часто у вас есть проблемы со сном?",
+            "question_type": "single_choice",
+            "source": "starter sleep scaffold",
+            "options": [
+              {"label": "Никогда", "value": "never", "score": 0},
+              {"label": "Иногда", "value": "sometimes", "score": 1},
+              {"label": "Часто", "value": "often", "score": 2}
+            ]
+          }
+        ],
+        "candidate_scoring_rules": {
+          "method": "sum_of_option_scores"
+        },
+        "candidate_risk_bands": [
+          {"min_score": 0, "max_score": 2, "label": "Low risk", "meaning": "Low estimated sleep-related risk in this screening graph."},
+          {"min_score": 3, "max_score": 1000, "label": "Elevated risk", "meaning": "Elevated sleep-related risk in this screening graph."}
+        ],
+        "candidate_report_requirements": [],
+        "candidate_safety_requirements": [],
+        "missing_fields": []
+      }
+    },
+    {
+      "strategy_id": "stress/default",
+      "topic": "stress",
+      "question_source_summary": "starter stress scaffold",
+      "scaffold": {
+        "understood": {
+          "topic": "stress",
+          "tags": ["stress", "burnout", "anxiety"],
+          "entry_signals": ["stress", "стресс", "выгорание", "anxiety"],
+          "source_summary": "starter stress scaffold generated from scaffold registry catalog"
+        },
+        "candidate_questions": [
+          {
+            "id": "q1",
+            "text": "Как часто вы ощущаете сильный стресс?",
+            "question_type": "single_choice",
+            "source": "starter stress scaffold",
+            "options": [
+              {"label": "Редко", "value": "rarely", "score": 0},
+              {"label": "Иногда", "value": "sometimes", "score": 1},
+              {"label": "Часто", "value": "often", "score": 2}
+            ]
+          }
+        ],
+        "candidate_scoring_rules": {
+          "method": "sum_of_option_scores"
+        },
+        "candidate_risk_bands": [
+          {"min_score": 0, "max_score": 1, "label": "Low risk", "meaning": "Low estimated stress-related risk in this screening graph."},
+          {"min_score": 2, "max_score": 1000, "label": "Elevated risk", "meaning": "Elevated stress-related risk in this screening graph."}
+        ],
+        "candidate_report_requirements": [],
+        "candidate_safety_requirements": [],
+        "missing_fields": []
+      }
+    },
+    {
+      "strategy_id": "stress/burnout",
+      "topic": "stress",
+      "framework": "burnout",
+      "question_source_summary": "starter burnout branching scaffold",
+      "scaffold": {
+        "understood": {
+          "topic": "stress",
+          "framework": "burnout",
+          "tags": ["stress", "burnout", "workload", "emotional exhaustion"],
+          "entry_signals": ["burnout", "выгорание", "exhaustion", "work stress"],
+          "source_summary": "starter burnout branching scaffold generated from scaffold registry catalog"
+        },
+        "candidate_questions": [
+          {
+            "id": "q1",
+            "text": "How often do you feel emotionally exhausted after work?",
+            "question_type": "single_choice",
+            "source": "starter burnout branching scaffold",
+            "options": [
+              {"label": "Rarely", "value": "rarely", "score": 0, "next_question_id": "q3"},
+              {"label": "Sometimes", "value": "sometimes", "score": 1, "next_question_id": "q2"},
+              {"label": "Often", "value": "often", "score": 2, "next_question_id": "q2"}
+            ]
+          },
+          {
+            "id": "q2",
+            "text": "When exhaustion is present, does rest usually restore your energy by the next day?",
+            "question_type": "single_choice",
+            "source": "starter burnout branching scaffold",
+            "options": [
+              {"label": "Yes", "value": "yes", "score": 0, "next_question_id": "q3"},
+              {"label": "Partly", "value": "partly", "score": 1, "next_question_id": "q3"},
+              {"label": "No", "value": "no", "score": 2, "next_question_id": "q3"}
+            ]
+          },
+          {
+            "id": "q3",
+            "text": "Has your work become more cynical, detached, or emotionally numb recently?",
+            "question_type": "single_choice",
+            "source": "starter burnout branching scaffold",
+            "options": [
+              {"label": "No", "value": "no", "score": 0, "next_question_id": "q5"},
+              {"label": "A little", "value": "a_little", "score": 1, "next_question_id": "q4"},
+              {"label": "Clearly yes", "value": "yes", "score": 2, "next_question_id": "q4"}
+            ]
+          },
+          {
+            "id": "q4",
+            "text": "Is this affecting your relationships with colleagues, patients, or clients?",
+            "question_type": "single_choice",
+            "source": "starter burnout branching scaffold",
+            "options": [
+              {"label": "No", "value": "no", "score": 0, "next_question_id": "q5"},
+              {"label": "Sometimes", "value": "sometimes", "score": 1, "next_question_id": "q5"},
+              {"label": "Often", "value": "often", "score": 2, "next_question_id": "q5"}
+            ]
+          },
+          {
+            "id": "q5",
+            "text": "Is your concentration or work effectiveness lower than usual?",
+            "question_type": "single_choice",
+            "source": "starter burnout branching scaffold",
+            "options": [
+              {"label": "No", "value": "no", "score": 0},
+              {"label": "Sometimes", "value": "sometimes", "score": 1},
+              {"label": "Often", "value": "often", "score": 2}
+            ]
+          }
+        ],
+        "candidate_scoring_rules": {
+          "method": "sum_of_option_scores"
+        },
+        "candidate_risk_bands": [
+          {"min_score": 0, "max_score": 2, "label": "Low burnout risk", "meaning": "Current answers do not strongly suggest burnout-related strain."},
+          {"min_score": 3, "max_score": 5, "label": "Moderate burnout risk", "meaning": "Some signs of emotional exhaustion or detachment are present."},
+          {"min_score": 6, "max_score": 1000, "label": "High burnout risk", "meaning": "The pattern is more consistent with possible burnout and deserves closer follow-up."}
+        ],
+        "candidate_report_requirements": [
+          "Summarize exhaustion, detachment, and performance impact separately.",
+          "Use supportive non-diagnostic wording.",
+          "State that burnout is a work-related screening construct and not a formal medical diagnosis.",
+          "For moderate or high risk, recommend reviewing workload and recovery and considering clinician or mental health follow-up if symptoms persist or worsen.",
+          "If functioning is worsening substantially, recommend timely in-person support rather than relying only on the bot."
+        ],
+        "candidate_safety_requirements": [
+          "Do not diagnose depression or anxiety from this screening alone."
+        ],
+        "missing_fields": []
+      }
+    }
+  ]
+}
